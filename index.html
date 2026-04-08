@@ -4,37 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Control de Limpieza</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
-:root{--g:#16a34a;--r:#dc2626;--b:#2563eb;--o:#d97706;--pu:#7c3aed}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#f9fafb;-webkit-tap-highlight-color:transparent}
-#app{max-width:480px;margin:0 auto;padding:16px;min-height:100vh;padding-bottom:40px}
+body{font-family:system-ui,sans-serif;background:#f9fafb}
+#app{max-width:480px;margin:0 auto;padding:16px;min-height:100vh;padding-bottom:48px}
 .card{background:white;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 16px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;color:white;font-family:inherit}
-.btn-g{background:var(--g)}.btn-r{background:var(--r)}.btn-b{background:var(--b)}.btn-o{background:var(--o)}.btn-gray{background:#9ca3af}
-.btn-out-b{background:white;color:var(--b);border:2px solid var(--b)}.btn-out-g{background:white;color:var(--g);border:2px solid var(--g)}
+.g{background:#16a34a}.r{background:#dc2626}.b{background:#2563eb}.o{background:#d97706}.gr{background:#9ca3af}
+.ob{background:white;color:#2563eb;border:2px solid #2563eb}
+.og{background:white;color:#16a34a;border:2px solid #16a34a}
 select,input[type=text],input[type=password],textarea{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #e5e7eb;font-size:15px;background:white;font-family:inherit;margin-bottom:8px}
-.lbl{font-size:12px;color:#6b7280;font-weight:700;letter-spacing:.06em;margin-bottom:5px}
-.nov-item{background:#dcfce7;border-radius:9px;padding:9px 12px;margin-bottom:6px;border-left:3px solid var(--g)}
-.media-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
-.media-thumb{border-radius:9px;overflow:hidden;aspect-ratio:1;background:#f3f4f6}
-.media-thumb img,.media-thumb video{width:100%;height:100%;object-fit:cover}
-.badge{display:inline-block;font-size:12px;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:6px}
+.lbl{font-size:12px;color:#6b7280;font-weight:700;letter-spacing:.05em;margin-bottom:6px}
+.nov{background:#dcfce7;border-radius:9px;padding:9px 12px;margin-bottom:6px;border-left:3px solid #16a34a}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.mthumb{border-radius:9px;overflow:hidden;aspect-ratio:1;background:#f3f4f6}
+.mthumb img,.mthumb video{width:100%;height:100%;object-fit:cover}
+.bdg{font-size:12px;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:6px}
 .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f3f4f6}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:100}
-.modal-box{background:white;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;margin:0 auto}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:100}
+.mbox{background:white;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;margin:0 auto;max-height:90vh;overflow-y:auto}
 .ac{border-left:4px solid #e5e7eb;border-radius:12px;background:white;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
-.ac.live{border-left-color:var(--g);background:#f0fdf4}
-.pulse{display:inline-block;width:8px;height:8px;background:var(--g);border-radius:50%;animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
-.stat-box{background:white;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.live{border-left-color:#16a34a;background:#f0fdf4}
+.sbox{background:white;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.dot{display:inline-block;width:8px;height:8px;background:#16a34a;border-radius:50%}
+.irow{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;background:#f9fafb;border-radius:9px;margin-bottom:6px}
+.tabs{display:flex;gap:4px;margin-bottom:16px;background:white;border-radius:12px;padding:4px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tab{flex:1;padding:9px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#6b7280}
+.tab.on{background:#16a34a;color:white}
 </style>
 </head>
 <body>
-<div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh"><div style="font-size:48px;animation:pulse 1s infinite">🧹</div></div></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+<div id="app" style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:52px">🧹</div>
 <script>
 firebase.initializeApp({
   apiKey:"AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
@@ -42,254 +44,357 @@ firebase.initializeApp({
   projectId:"lavanderia-limpieza",
   storageBucket:"lavanderia-limpieza.firebasestorage.app",
   messagingSenderId:"229695150868",
-  appId:"1:229695150868:web:082157b403bcef987b8001",
-  measurementId:"G-VZL67MJ11R"
+  appId:"1:229695150868:web:082157b403bcef987b8001"
 });
-const db = firebase.firestore();
+var db = firebase.firestore();
 
-const WORKERS = ["María García","Juan López","Ana Martínez","Pedro Rodríguez","Laura Gómez"];
-const DEFAULT_APTS = [
-  "201 LAURELES TCG","302 LAURELES TCG","303 LAURELES TCG","303 MONSERRATE TCG",
-  "306 ROMULO","308 BASELOFT DIEGO CAMACHO","311 ADRIANA","405 ROMULO",
-  "501 AVENIDA DEL CERRO ALEJANDRA","501 TCG","503 BASELOFT TCG","510 SERGIO BASELOFT",
-  "712 RUFFGO","810 ADRIANA","1003 TCG","1103 TCG","1305 TCG","1402 TCG",
-  "1405 TCG","1703 TCG","1802 TCG","2105 TCG","2204 LIGIA","2404 ALEJA",
-  "2505 TCG","2701 TCG"
-];
-const ADMIN_PASS = "admin2024";
+var DEF_APTS = ["201 LAURELES TCG","302 LAURELES TCG","303 LAURELES TCG","303 MONSERRATE TCG","306 ROMULO","308 BASELOFT DIEGO CAMACHO","311 ADRIANA","405 ROMULO","501 AVENIDA DEL CERRO ALEJANDRA","501 TCG","503 BASELOFT TCG","510 SERGIO BASELOFT","712 RUFFGO","810 ADRIANA","1003 TCG","1103 TCG","1305 TCG","1402 TCG","1405 TCG","1703 TCG","1802 TCG","2105 TCG","2204 LIGIA","2404 ALEJA","2505 TCG","2701 TCG"];
+var DEF_WORKERS = ["Maria Garcia","Juan Lopez","Ana Martinez","Pedro Rodriguez","Laura Gomez"];
+var PASS = "admin2024";
 
-const S = {
-  screen:'home', worker:'', apt:'', aptList:[...DEFAULT_APTS],
+var S = {
+  screen:"home", worker:"", apt:"",
+  aptList: DEF_APTS.slice(), workerList: DEF_WORKERS.slice(),
   sessionId:null, sessionStart:null, elapsed:0,
   novedades:[], entryMedia:[], danosMedia:[], exitMedia:[],
-  showModal:false, showNovForm:false, novDraft:'',
+  showModal:false, showNovForm:false,
   lastRec:null, adminRecs:[], adminUnsub:null, timerInt:null,
-  adminPass:'', adminError:''
+  adminError:"", tab:"apts"
 };
 
-const fmt = s => [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(x=>String(x).padStart(2,'0')).join(':');
-const fmtDate = d => new Date(d).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
-const fmtHour = d => new Date(d).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
-const nowTime = () => new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-const toDate = t => t?.toDate ? t.toDate() : (t ? new Date(t) : new Date());
+function fmt(s){ return [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(function(x){return String(x).padStart(2,"0")}).join(":"); }
+function fmtDate(d){ return new Date(d).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"}); }
+function fmtHour(d){ return new Date(d).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}); }
+function nowTime(){ return new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); }
+function toDate(t){ return t&&t.toDate?t.toDate():(t?new Date(t):new Date()); }
 
-function mediaGridHTML(items){
-  if(!items.length) return '';
-  return `<div class="media-grid">${items.map(it=>
-    `<div class="media-thumb">${it.isVideo
-      ?`<video src="${it.url}" controls></video>`
-      :`<img src="${it.url}">`}</div>`
-  ).join('')}</div>`;
+function mgrid(items){
+  if(!items.length) return "";
+  var h='<div class="mgrid">';
+  items.forEach(function(it){
+    h+='<div class="mthumb">'+(it.isVideo?'<video src="'+it.url+'" controls></video>':'<img src="'+it.url+'">')+'</div>';
+  });
+  return h+'</div>';
 }
 function novHTML(list){
-  return list.map(n=>`<div class="nov-item"><div style="font-size:12px;color:var(--g);font-weight:600;margin-bottom:2px">${n.time}</div><div style="font-size:14px">${n.text}</div></div>`).join('');
+  var h="";
+  list.forEach(function(n){
+    h+='<div class="nov"><div style="font-size:12px;color:#16a34a;font-weight:600;margin-bottom:2px">'+n.time+'</div><div style="font-size:14px">'+n.text+'</div></div>';
+  });
+  return h;
 }
 
-async function loadApts(){
-  try{const d=await db.collection('config').doc('apartamentos').get();if(d.exists)S.aptList=d.data().list;}catch(e){}
+function loadConfig(){
+  return db.collection("config").doc("apartamentos").get().then(function(d){
+    if(d.exists) S.aptList = d.data().list;
+    return db.collection("config").doc("trabajadores").get();
+  }).then(function(d){
+    if(d.exists) S.workerList = d.data().list;
+  }).catch(function(){});
 }
-async function saveApts(list){
+function saveApts(list){
   S.aptList=list;
-  try{await db.collection('config').doc('apartamentos').set({list});}catch(e){}
+  db.collection("config").doc("apartamentos").set({list:list}).catch(function(){});
   render();
 }
-async function createDoc(){
-  const d=await db.collection('limpiezas').add({
-    worker:S.worker,apt:S.apt,
+function saveWorkers(list){
+  S.workerList=list;
+  db.collection("config").doc("trabajadores").set({list:list}).catch(function(){});
+  render();
+}
+function createDoc(){
+  return db.collection("limpiezas").add({
+    worker:S.worker, apt:S.apt,
     startTime:firebase.firestore.Timestamp.now(),
-    status:'active',novedades:[],
-    entryCount:0,danosCount:0,exitCount:0,duration:0
-  });
-  return d.id;
+    status:"active", novedades:[],
+    entryCount:0, danosCount:0, exitCount:0, duration:0
+  }).then(function(d){ return d.id; });
 }
-async function patchDoc(data){
+function patchDoc(data){
   if(!S.sessionId) return;
-  try{await db.collection('limpiezas').doc(S.sessionId).update(data);}catch(e){}
+  db.collection("limpiezas").doc(S.sessionId).update(data).catch(function(){});
 }
-async function closeDoc(){
-  await patchDoc({
-    status:'completed',
+function closeDoc(){
+  return patchDoc({
+    status:"completed",
     endTime:firebase.firestore.Timestamp.now(),
-    duration:S.elapsed,
-    novedades:S.novedades,
-    entryCount:S.entryMedia.length,
-    danosCount:S.danosMedia.length,
-    exitCount:S.exitMedia.length
+    duration:S.elapsed, novedades:S.novedades,
+    entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length
   });
 }
 function subscribeAdmin(){
   if(S.adminUnsub) S.adminUnsub();
-  S.adminUnsub=db.collection('limpiezas')
-    .orderBy('startTime','desc').limit(100)
-    .onSnapshot(snap=>{
-      S.adminRecs=snap.docs.map(d=>({id:d.id,...d.data()}));
-      if(S.screen==='admin') render();
-    },err=>console.log(err));
+  S.adminUnsub = db.collection("limpiezas").orderBy("startTime","desc").limit(100)
+    .onSnapshot(function(snap){
+      S.adminRecs = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+      if(S.screen==="admin") render();
+    }, function(){});
 }
 
-function screenHome(){
-  return `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 12px">
-      <div><div style="font-size:36px">🧹</div>
-        <h1 style="margin:6px 0 2px;font-size:22px;font-weight:800;color:#111827">Control de Limpieza</h1>
-        <p style="color:#6b7280;font-size:13px">Gestión de apartamentos</p></div>
-      <button class="btn" style="width:auto;padding:8px 12px;background:white;color:#111827;border:1px solid #e5e7eb;margin-top:8px" onclick="go('settings')">⚙️</button>
-    </div>
-    <div class="card">
-      <div class="lbl">👤 TRABAJADOR</div>
-      <select onchange="S.worker=this.value">
-        <option value="">Seleccionar trabajador...</option>
-        ${WORKERS.map(w=>`<option ${S.worker===w?'selected':''}>${w}</option>`).join('')}
-      </select>
-      <div class="lbl">🏠 APARTAMENTO</div>
-      <select onchange="S.apt=this.value">
-        <option value="">Seleccionar apartamento...</option>
-        ${[...S.aptList].sort().map(a=>`<option ${S.apt===a?'selected':''}>${a}</option>`).join('')}
-      </select>
-      <button class="btn ${S.worker&&S.apt?'btn-g':'btn-gray'}" style="font-size:16px;padding:14px;margin-top:4px" onclick="startCleaning()">▶ Iniciar Limpieza</button>
-    </div>
-    <button class="btn btn-b" style="margin-top:0" onclick="go('adminLogin')">👨‍💼 Panel de Administrador</button>`;
+// ── PANTALLAS ──
+function sHome(){
+  var ao="", wo="";
+  S.aptList.slice().sort().forEach(function(a){ ao+='<option value="'+a+'"'+(S.apt===a?" selected":"")+'>'+a+'</option>'; });
+  S.workerList.forEach(function(w){ wo+='<option value="'+w+'"'+(S.worker===w?" selected":"")+'>'+w+'</option>'; });
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 12px">'+
+    '<div><div style="font-size:36px">🧹</div><h1 style="font-size:22px;font-weight:800;color:#111827;margin:6px 0 2px">Control de Limpieza</h1><p style="color:#6b7280;font-size:13px">Gestion de apartamentos</p></div>'+
+    '<button class="btn gr" style="width:auto;padding:8px 14px;margin-top:8px" onclick="go(\'settings\')">Gestion ⚙️</button></div>'+
+    '<div class="card">'+
+    '<div class="lbl">TRABAJADOR</div>'+
+    '<select onchange="S.worker=this.value"><option value="">Seleccionar trabajador...</option>'+wo+'</select>'+
+    '<div class="lbl">APARTAMENTO</div>'+
+    '<select onchange="S.apt=this.value"><option value="">Seleccionar apartamento...</option>'+ao+'</select>'+
+    '<button class="btn '+(S.worker&&S.apt?"g":"gr")+'" style="font-size:16px;padding:14px;margin-top:4px" onclick="startCleaning()">Iniciar Limpieza</button></div>'+
+    '<button class="btn b" style="margin-top:0" onclick="go(\'adminLogin\')">Panel de Administrador</button>';
 }
 
-function screenActive(){
-  return `
-    <div style="background:linear-gradient(135deg,#16a34a,#15803d);border-radius:16px;padding:20px;color:white;margin-bottom:12px;text-align:center">
-      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;opacity:.85;margin-bottom:4px">🧹 LIMPIEZA EN CURSO</div>
-      <div style="font-size:18px;font-weight:800;margin-bottom:2px">${S.apt}</div>
-      <div style="font-size:14px;opacity:.85;margin-bottom:14px">👤 ${S.worker}</div>
-      <div id="tmr" style="font-size:50px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:2px;line-height:1">${fmt(S.elapsed)}</div>
-      <div style="font-size:12px;opacity:.75;margin-top:6px">Inicio: ${fmtHour(S.sessionStart)}</div>
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <span style="font-weight:700;font-size:15px">🚪 Evidencia de Entrada</span>
-        <span class="badge" style="background:#eff6ff;color:var(--b)">${S.entryMedia.length}</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <label class="btn btn-b" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">🎥 Grabar Video<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'entry')"></label>
-        <label class="btn btn-out-b" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">📸 Foto<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'entry')"></label>
-      </div>
-      ${mediaGridHTML(S.entryMedia)}
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-weight:700;font-size:15px">📝 Novedades</span>
-        <span class="badge" style="background:#fef3c7;color:var(--o)">${S.novedades.length}</span>
-      </div>
-      ${novHTML(S.novedades)}
-      ${S.showNovForm?`
-        <textarea id="novta" placeholder="Escribir novedad..." style="height:80px;resize:none;margin-top:6px"></textarea>
-        <button class="btn btn-g" style="margin-top:6px" onclick="submitNov()">✅ Guardar</button>
-        <button class="btn btn-gray" style="margin-top:6px" onclick="S.showNovForm=false;render()">Cancelar</button>
-      `:`<button class="btn btn-o" style="margin-top:0" onclick="S.showNovForm=true;render()">➕ Agregar Novedad</button>`}
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <span style="font-weight:700;font-size:15px">⚠️ Evidencia de Daños</span>
-        <span class="badge" style="background:#fff1f2;color:var(--r)">${S.danosMedia.length}</span>
-      </div>
-      <label class="btn btn-r" style="margin-top:0;cursor:pointer">📸 Fotografiar Daño<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'danos')"></label>
-      ${mediaGridHTML(S.danosMedia)}
-    </div>
-    <button class="btn btn-r" style="padding:15px;font-size:16px;margin-top:4px" onclick="S.showModal=true;render()">⏹ Finalizar Limpieza</button>
-    ${S.showModal?`<div class="modal-overlay"><div class="modal-box">
-      <div style="text-align:center;margin-bottom:16px">
-        <div style="font-size:40px">🚪</div>
-        <h3 style="margin:8px 0 4px">Evidencia de Salida</h3>
-        <p style="color:#6b7280;font-size:14px">Graba o toma fotos del estado final</p>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <label class="btn btn-g" style="margin-top:0;font-size:13px;cursor:pointer">🎥 Grabar Video<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'exit')"></label>
-        <label class="btn btn-out-g" style="margin-top:0;font-size:13px;cursor:pointer">📸 Foto<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'exit')"></label>
-      </div>
-      ${mediaGridHTML(S.exitMedia)}
-      <button class="btn btn-r" style="padding:14px;margin-top:14px" onclick="finalizarLimpieza()">✅ Confirmar Finalización</button>
-      <button class="btn btn-gray" style="margin-top:8px" onclick="S.showModal=false;render()">Cancelar</button>
-    </div></div>`:''}`;
+function sSettings(){
+  var isApts = S.tab==="apts";
+  var list = isApts ? S.aptList.slice().sort() : S.workerList.slice().sort();
+  var rows = "";
+  list.forEach(function(item, i){
+    var ri = isApts ? S.aptList.indexOf(item) : S.workerList.indexOf(item);
+    rows += '<div class="irow"><span style="font-size:14px;font-weight:500">'+item+'</span>'+
+      '<div style="display:flex;gap:6px">'+
+      '<button onclick="editItem('+ri+')" style="background:#eff6ff;color:#2563eb;border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-weight:600;font-size:13px">Editar</button>'+
+      '<button onclick="delItem('+ri+')" style="background:#fff1f2;color:#dc2626;border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:13px">Borrar</button>'+
+      '</div></div>';
+  });
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
+    '<button class="btn gr" style="width:auto;padding:6px 14px;margin-top:0" onclick="go(\'home\')">Volver</button>'+
+    '<div><h2 style="font-size:19px;color:#111827">Gestion del Sistema</h2>'+
+    '<p style="font-size:12px;color:#6b7280">Edita apartamentos y trabajadores</p></div></div>'+
+    '<div class="tabs">'+
+    '<button class="tab'+(isApts?" on":"")+'" onclick="S.tab=\'apts\';render()">Apartamentos ('+S.aptList.length+')</button>'+
+    '<button class="tab'+(!isApts?" on":"")+'" onclick="S.tab=\'workers\';render()">Trabajadores ('+S.workerList.length+')</button>'+
+    '</div>'+
+    '<div class="card"><div class="lbl">AGREGAR NUEVO '+(isApts?"APARTAMENTO":"TRABAJADOR")+'</div>'+
+    '<div style="display:flex;gap:8px"><input type="text" id="ni" placeholder="'+(isApts?"Ej: 2802 TCG":"Ej: Carlos Perez")+'" style="flex:1;margin:0">'+
+    '<button onclick="addItem()" style="background:#16a34a;color:white;border:none;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:18px">+</button></div></div>'+
+    '<div class="card"><div class="lbl">LISTA</div>'+rows+'</div>';
 }
 
-function screenSummary(){
-  const r=S.lastRec; if(!r) return '';
-  return `
-    <div style="text-align:center;padding:24px 0 16px">
-      <div style="font-size:56px">✅</div>
-      <h2 style="margin:10px 0 4px;color:var(--g);font-size:22px">¡Limpieza Completada!</h2>
-      <p style="color:#6b7280;font-size:14px">${fmtDate(r.endTime)}</p>
-    </div>
-    <div class="card">
-      <div class="row"><span style="color:#6b7280;font-size:14px">👤 Trabajador</span><span style="font-weight:700">${r.worker}</span></div>
-      <div class="row"><span style="color:#6b7280;font-size:14px">🏠 Apartamento</span><span style="font-weight:700">${r.apt}</span></div>
-      <div class="row"><span style="color:#6b7280;font-size:14px">⏱️ Duración</span><span style="font-weight:700;color:var(--g);font-size:18px">${fmt(r.duration)}</span></div>
-      <div class="row"><span style="color:#6b7280;font-size:14px">🕐 Inicio</span><span style="font-weight:700">${fmtHour(r.startTime)}</span></div>
-      <div class="row"><span style="color:#6b7280;font-size:14px">🕐 Fin</span><span style="font-weight:700">${fmtHour(r.endTime)}</span></div>
-      <div class="row"><span style="color:#6b7280;font-size:14px">🎥 Archivos entrada</span><span style="font-weight:700">${r.entryCount}</span></div>
-      <div class="row"><span style="color:#6b7280;font-size:14px">⚠️ Fotos daños</span><span style="font-weight:700">${r.danosCount}</span></div>
-      <div class="row"><span style="color:#6b7280;font-size:14px">🎥 Archivos salida</span><span style="font-weight:700">${r.exitCount}</span></div>
-      <div class="row" style="border:none"><span style="color:#6b7280;font-size:14px">📝 Novedades</span><span style="font-weight:700">${r.novedades.length}</span></div>
-    </div>
-    ${r.novedades.length?`<div class="card"><div style="font-weight:700;margin-bottom:10px">📝 Novedades</div>${novHTML(r.novedades)}</div>`:''}
-    ${S.entryMedia.length?`<div class="card"><div style="font-weight:700;margin-bottom:8px">🚪 Evidencia Entrada</div>${mediaGridHTML(S.entryMedia)}</div>`:''}
-    ${S.danosMedia.length?`<div class="card"><div style="font-weight:700;margin-bottom:8px">⚠️ Fotos Daños</div>${mediaGridHTML(S.danosMedia)}</div>`:''}
-    ${S.exitMedia.length?`<div class="card"><div style="font-weight:700;margin-bottom:8px">🚪 Evidencia Salida</div>${mediaGridHTML(S.exitMedia)}</div>`:''}
-    <button class="btn btn-g" style="padding:14px;font-size:16px;margin-top:0" onclick="goHome()">🏠 Nueva Limpieza</button>
-    <button class="btn btn-b" style="margin-top:10px" onclick="go('adminLogin')">👨‍💼 Ver Panel Admin</button>`;
+function sActive(){
+  return '<div style="background:linear-gradient(135deg,#16a34a,#15803d);border-radius:16px;padding:20px;color:white;margin-bottom:12px;text-align:center">'+
+    '<div style="font-size:11px;font-weight:700;opacity:.85;margin-bottom:4px">LIMPIEZA EN CURSO</div>'+
+    '<div style="font-size:18px;font-weight:800;margin-bottom:2px">'+S.apt+'</div>'+
+    '<div style="font-size:14px;opacity:.85;margin-bottom:14px">'+S.worker+'</div>'+
+    '<div id="tmr" style="font-size:50px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:2px;line-height:1">'+fmt(S.elapsed)+'</div>'+
+    '<div style="font-size:12px;opacity:.75;margin-top:6px">Inicio: '+fmtHour(S.sessionStart)+'</div></div>'+
+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+    '<span style="font-weight:700;font-size:15px">Evidencia de Entrada</span><span class="bdg" style="background:#eff6ff;color:#2563eb">'+S.entryMedia.length+'</span></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+    '<label class="btn b" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">Video Entrada<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'entry\')"></label>'+
+    '<label class="btn ob" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">Foto Entrada<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'entry\')"></label>'+
+    '</div>'+mgrid(S.entryMedia)+'</div>'+
+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+    '<span style="font-weight:700;font-size:15px">Novedades</span><span class="bdg" style="background:#fef3c7;color:#d97706">'+S.novedades.length+'</span></div>'+
+    novHTML(S.novedades)+
+    (S.showNovForm?
+      '<textarea id="novta" placeholder="Escribir novedad..." style="height:80px;resize:none;margin-top:6px"></textarea>'+
+      '<button class="btn g" style="margin-top:6px" onclick="submitNov()">Guardar</button>'+
+      '<button class="btn gr" style="margin-top:6px" onclick="S.showNovForm=false;render()">Cancelar</button>':
+      '<button class="btn o" style="margin-top:0" onclick="S.showNovForm=true;render()">+ Agregar Novedad</button>')+
+    '</div>'+
+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+    '<span style="font-weight:700;font-size:15px">Evidencia de Danos</span><span class="bdg" style="background:#fff1f2;color:#dc2626">'+S.danosMedia.length+'</span></div>'+
+    '<label class="btn r" style="margin-top:0;cursor:pointer">Fotografiar Dano<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'danos\')"></label>'+
+    mgrid(S.danosMedia)+'</div>'+
+
+    '<button class="btn r" style="padding:15px;font-size:16px;margin-top:4px" onclick="S.showModal=true;render()">Finalizar Limpieza</button>'+
+
+    (S.showModal?'<div class="overlay"><div class="mbox">'+
+    '<div style="text-align:center;margin-bottom:16px">'+
+    '<div style="font-size:40px">Salida</div>'+
+    '<h3 style="margin:8px 0 4px">Evidencia de Salida</h3>'+
+    '<p style="color:#6b7280;font-size:14px">Graba o toma fotos del estado final</p></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+    '<label class="btn g" style="margin-top:0;font-size:13px;cursor:pointer">Video Salida<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'exit\')"></label>'+
+    '<label class="btn og" style="margin-top:0;font-size:13px;cursor:pointer">Foto Salida<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'exit\')"></label>'+
+    '</div>'+mgrid(S.exitMedia)+
+    '<button class="btn r" style="padding:14px;margin-top:14px" onclick="finalizarLimpieza()">Confirmar Finalizacion</button>'+
+    '<button class="btn gr" style="margin-top:8px" onclick="S.showModal=false;render()">Cancelar</button>'+
+    '</div></div>':'');
 }
 
-function screenAdminLogin(){
-  return `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh">
-      <div style="font-size:52px;margin-bottom:16px">🔐</div>
-      <h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:6px">Panel de Administrador</h2>
-      <p style="color:#6b7280;font-size:14px;margin-bottom:24px">Ingresa la contraseña para continuar</p>
-      <div class="card" style="width:100%;max-width:360px">
-        <div class="lbl">CONTRASEÑA</div>
-        <input type="password" id="adm-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')checkPass()" style="font-size:18px;letter-spacing:4px">
-        ${S.adminError?`<div style="color:var(--r);font-size:13px;margin-bottom:8px;font-weight:600">⚠️ ${S.adminError}</div>`:''}
-        <button class="btn btn-b" style="margin-top:4px" onclick="checkPass()">Entrar al Panel</button>
-      </div>
-      <button class="btn btn-gray" style="width:auto;padding:8px 20px;margin-top:16px" onclick="go('home')">← Volver</button>
-    </div>`;
+function sSummary(){
+  var r = S.lastRec; if(!r) return "";
+  return '<div style="text-align:center;padding:24px 0 16px">'+
+    '<div style="font-size:56px">✅</div>'+
+    '<h2 style="margin:10px 0 4px;color:#16a34a;font-size:22px">Limpieza Completada</h2>'+
+    '<p style="color:#6b7280;font-size:14px">'+fmtDate(r.endTime)+'</p></div>'+
+    '<div class="card">'+
+    '<div class="row"><span style="color:#6b7280;font-size:14px">Trabajador</span><span style="font-weight:700">'+r.worker+'</span></div>'+
+    '<div class="row"><span style="color:#6b7280;font-size:14px">Apartamento</span><span style="font-weight:700">'+r.apt+'</span></div>'+
+    '<div class="row"><span style="color:#6b7280;font-size:14px">Duracion</span><span style="font-weight:800;color:#16a34a;font-size:18px">'+fmt(r.duration)+'</span></div>'+
+    '<div class="row"><span style="color:#6b7280;font-size:14px">Inicio</span><span style="font-weight:700">'+fmtHour(r.startTime)+'</span></div>'+
+    '<div class="row"><span style="color:#6b7280;font-size:14px">Fin</span><span style="font-weight:700">'+fmtHour(r.endTime)+'</span></div>'+
+    '<div class="row"><span style="color:#6b7280;font-size:14px">Archivos entrada</span><span style="font-weight:700">'+r.entryCount+'</span></div>'+
+    '<div class="row"><span style="color:#6b7280;font-size:14px">Fotos danos</span><span style="font-weight:700">'+r.danosCount+'</span></div>'+
+    '<div class="row" style="border:none"><span style="color:#6b7280;font-size:14px">Archivos salida</span><span style="font-weight:700">'+r.exitCount+'</span></div></div>'+
+    (r.novedades.length?'<div class="card"><div style="font-weight:700;margin-bottom:10px">Novedades</div>'+novHTML(r.novedades)+'</div>':'')+
+    '<button class="btn g" style="padding:14px;font-size:16px;margin-top:0" onclick="goHome()">Nueva Limpieza</button>'+
+    '<button class="btn b" style="margin-top:10px" onclick="go(\'adminLogin\')">Ver Panel Admin</button>';
 }
 
-function screenAdmin(){
-  const live=S.adminRecs.filter(r=>r.status==='active');
-  const done=S.adminRecs.filter(r=>r.status==='completed');
-  const todayStr=new Date().toDateString();
-  const todayDone=done.filter(r=>toDate(r.endTime).toDateString()===todayStr);
-  const avgDur=todayDone.length?Math.round(todayDone.reduce((a,r)=>a+r.duration,0)/todayDone.length):0;
-  return `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <button class="btn" style="width:auto;padding:6px 14px;background:white;color:#111827;border:1px solid #e5e7eb;margin-top:0" onclick="leaveAdmin()">←</button>
-      <div>
-        <h2 style="font-size:19px;color:#111827;display:flex;align-items:center;gap:8px">👨‍💼 Panel Admin <span class="pulse"></span></h2>
-        <p style="font-size:12px;color:#6b7280">Tiempo real · Firebase</p>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
-      <div class="stat-box"><div style="font-size:28px;font-weight:900;color:var(--g)">${live.length}</div><div style="font-size:11px;color:#6b7280;font-weight:700">EN CURSO</div></div>
-      <div class="stat-box"><div style="font-size:28px;font-weight:900;color:var(--b)">${todayDone.length}</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div>
-      <div class="stat-box"><div style="font-size:18px;font-weight:900;color:var(--o)">${fmt(avgDur)}</div><div style="font-size:11px;color:#6b7280;font-weight:700">PROMEDIO</div></div>
-    </div>
-    ${live.length?`
-      <div class="lbl" style="margin-bottom:8px">🟢 EN CURSO AHORA (${live.length})</div>
-      ${live.map(r=>`<div class="ac live">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <div style="font-weight:700;font-size:15px">${r.apt}</div>
-            <div style="font-size:13px;color:#6b7280;margin-top:2px">👤 ${r.worker}</div>
-            <div style="font-size:12px;color:#9ca3af;margin-top:2px">Inicio: ${fmtHour(toDate(r.startTime))}</div>
-          </div>
-          <div style="background:#dcfce7;color:var(--g);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700">● ACTIVO</div>
-        </div>
-        ${r.novedades?.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #bbf7d0">${novHTML(r.novedades)}</div>`:''}
-      </div>`).join('')}
-    `:''}
-    <div class="lbl" style="margin-bottom:8px;margin-top:4px">📋 HISTORIAL (${done.length})</div>
-    ${!done.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros aún</p>':
-      done.map(r=>{
-        const s=toDate(r.startTime),e=toDate(r.endTime);
-        return `<div class="ac">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start">
-            <div>
-              <div style="font-weight:700;font-size:15px">${r.apt}</div>
-              <div style="font-size:13px;color:#6b7280;margin
+function sAdminLogin(){
+  return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh">'+
+    '<div style="font-size:52px;margin-bottom:16px">🔐</div>'+
+    '<h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:6px">Panel de Administrador</h2>'+
+    '<p style="color:#6b7280;font-size:14px;margin-bottom:24px">Ingresa la contrasena para continuar</p>'+
+    '<div class="card" style="width:100%">'+
+    '<div class="lbl">CONTRASENA</div>'+
+    '<input type="password" id="ap" placeholder="..." onkeydown="if(event.key===\'Enter\')checkPass()" style="font-size:18px;letter-spacing:4px">'+
+    (S.adminError?'<div style="color:#dc2626;font-size:13px;margin-bottom:8px;font-weight:600">'+S.adminError+'</div>':'')+
+    '<button class="btn b" style="margin-top:4px" onclick="checkPass()">Entrar</button></div>'+
+    '<button class="btn gr" style="width:auto;padding:8px 20px;margin-top:16px" onclick="go(\'home\')">Volver</button></div>';
+}
+
+function sAdmin(){
+  var live = S.adminRecs.filter(function(r){return r.status==="active";});
+  var done = S.adminRecs.filter(function(r){return r.status==="completed";});
+  var todayStr = new Date().toDateString();
+  var todayDone = done.filter(function(r){return toDate(r.endTime).toDateString()===todayStr;});
+  var total = todayDone.reduce(function(a,r){return a+r.duration;},0);
+  var avgDur = todayDone.length ? Math.round(total/todayDone.length) : 0;
+
+  var lH = "";
+  live.forEach(function(r){
+    lH += '<div class="ac live">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+      '<div><div style="font-weight:700;font-size:15px">'+r.apt+'</div>'+
+      '<div style="font-size:13px;color:#6b7280;margin-top:2px">'+r.worker+'</div>'+
+      '<div style="font-size:12px;color:#9ca3af;margin-top:2px">Inicio: '+fmtHour(toDate(r.startTime))+'</div></div>'+
+      '<div style="background:#dcfce7;color:#16a34a;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700"><span class="dot"></span> ACTIVO</div></div>'+
+      (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #bbf7d0">'+novHTML(r.novedades)+'</div>':'')+
+      '</div>';
+  });
+
+  var dH = "";
+  done.forEach(function(r){
+    var s=toDate(r.startTime), e=toDate(r.endTime);
+    dH += '<div class="ac">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+      '<div><div style="font-weight:700;font-size:15px">'+r.apt+'</div>'+
+      '<div style="font-size:13px;color:#6b7280;margin-top:2px">'+r.worker+'</div>'+
+      '<div style="font-size:12px;color:#9ca3af;margin-top:2px">'+fmtDate(e)+' '+fmtHour(s)+'-'+fmtHour(e)+'</div></div>'+
+      '<div style="text-align:right"><div style="font-weight:900;color:#16a34a;font-size:18px">'+fmt(r.duration||0)+'</div>'+
+      '<div style="font-size:11px;color:#9ca3af;margin-top:3px">'+((r.entryCount||0)+(r.danosCount||0)+(r.exitCount||0))+' arch, '+(r.novedades?r.novedades.length:0)+' nov</div></div></div>'+
+      (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6">'+novHTML(r.novedades)+'</div>':'')+
+      '</div>';
+  });
+
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
+    '<button class="btn gr" style="width:auto;padding:6px 14px;margin-top:0" onclick="leaveAdmin()">Volver</button>'+
+    '<div><h2 style="font-size:19px;color:#111827">Panel Admin</h2>'+
+    '<p style="font-size:12px;color:#6b7280">Tiempo real - Firebase</p></div></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
+    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#16a34a">'+live.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">EN CURSO</div></div>'+
+    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#2563eb">'+todayDone.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div>'+
+    '<div class="sbox"><div style="font-size:18px;font-weight:900;color:#d97706">'+fmt(avgDur)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">PROMEDIO</div></div></div>'+
+    (live.length?'<div class="lbl" style="margin-bottom:8px">EN CURSO ('+live.length+')</div>'+lH:'')+
+    '<div class="lbl" style="margin-bottom:8px;margin-top:4px">HISTORIAL ('+done.length+')</div>'+
+    (!done.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros aun</p>':dH);
+}
+
+function render(){
+  var sc = {home:sHome,settings:sSettings,active:sActive,summary:sSummary,adminLogin:sAdminLogin,admin:sAdmin};
+  document.getElementById("app").innerHTML = (sc[S.screen]||sHome)();
+}
+function go(s){ S.screen=s; render(); }
+
+function startCleaning(){
+  if(!S.worker||!S.apt) return;
+  S.sessionStart=new Date(); S.elapsed=0;
+  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
+  S.showModal=false; S.showNovForm=false;
+  go("active");
+  createDoc().then(function(id){ S.sessionId=id; });
+  clearInterval(S.timerInt);
+  S.timerInt=setInterval(function(){
+    S.elapsed++;
+    var t=document.getElementById("tmr");
+    if(t) t.textContent=fmt(S.elapsed);
+  },1000);
+}
+
+function addMedia(files,type){
+  var map={entry:S.entryMedia,danos:S.danosMedia,exit:S.exitMedia};
+  var arr=map[type];
+  Array.from(files).forEach(function(f){
+    var rd=new FileReader();
+    rd.onload=function(e){ arr.push({url:e.target.result,isVideo:f.type.startsWith("video")}); render(); };
+    rd.readAsDataURL(f);
+  });
+}
+
+function submitNov(){
+  var ta=document.getElementById("novta");
+  var text=ta&&ta.value.trim();
+  if(!text) return;
+  S.novedades.push({text:text,time:nowTime()});
+  S.showNovForm=false; render();
+  patchDoc({novedades:S.novedades});
+}
+
+function finalizarLimpieza(){
+  clearInterval(S.timerInt);
+  closeDoc();
+  S.lastRec={
+    worker:S.worker, apt:S.apt,
+    startTime:S.sessionStart, endTime:new Date(),
+    duration:S.elapsed, novedades:S.novedades,
+    entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length
+  };
+  S.showModal=false; go("summary");
+}
+
+function goHome(){
+  clearInterval(S.timerInt);
+  S.screen="home"; S.sessionId=null; S.worker=""; S.apt=""; S.elapsed=0;
+  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
+  render();
+}
+
+function checkPass(){
+  var el=document.getElementById("ap");
+  if(el&&el.value===PASS){
+    S.adminError=""; S.screen="admin"; render(); subscribeAdmin();
+  } else {
+    S.adminError="Contrasena incorrecta"; render();
+  }
+}
+function leaveAdmin(){ if(S.adminUnsub){S.adminUnsub();S.adminUnsub=null;} go("home"); }
+
+function addItem(){
+  var el=document.getElementById("ni");
+  var v=el&&el.value.trim().toUpperCase();
+  if(!v) return;
+  if(S.tab==="apts") saveApts(S.aptList.concat([v]));
+  else saveWorkers(S.workerList.concat([v]));
+  if(el) el.value="";
+}
+function editItem(ri){
+  var isApts=S.tab==="apts";
+  var orig=(isApts?S.aptList:S.workerList)[ri];
+  var v=prompt("Editar:",orig);
+  if(!v||!v.trim()) return;
+  if(isApts){ var la=S.aptList.slice(); la[ri]=v.trim().toUpperCase(); saveApts(la); }
+  else { var lw=S.workerList.slice(); lw[ri]=v.trim(); saveWorkers(lw); }
+}
+function delItem(ri){
+  var isApts=S.tab==="apts";
+  var name=(isApts?S.aptList:S.workerList)[ri];
+  if(confirm("Eliminar: "+name+"?")){
+    if(isApts) saveApts(S.aptList.filter(function(_,i){return i!==ri;}));
+    else saveWorkers(S.workerList.filter(function(_,i){return i!==ri;}));
+  }
+}
+
+loadConfig().then(function(){ render(); });
+</script>
+</body>
+</html>
