@@ -15,7 +15,7 @@ body{font-family:system-ui,sans-serif;background:#f9fafb}
 .g{background:#16a34a}.r{background:#dc2626}.b{background:#2563eb}.o{background:#d97706}.gr{background:#9ca3af}
 .ob{background:white;color:#2563eb;border:2px solid #2563eb}
 .og{background:white;color:#16a34a;border:2px solid #16a34a}
-select,input[type=text],input[type=password],textarea{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #e5e7eb;font-size:15px;background:white;font-family:inherit;margin-bottom:8px}
+select,input[type=text],input[type=password],input[type=number],input[type=date],textarea{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #e5e7eb;font-size:15px;background:white;font-family:inherit;margin-bottom:8px}
 .lbl{font-size:12px;color:#6b7280;font-weight:700;letter-spacing:.05em;margin-bottom:6px}
 .nov{background:#dcfce7;border-radius:9px;padding:9px 12px;margin-bottom:6px;border-left:3px solid #16a34a}
 .mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
@@ -26,25 +26,27 @@ select,input[type=text],input[type=password],textarea{width:100%;padding:11px 12
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:100}
 .mbox{background:white;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;margin:0 auto;max-height:90vh;overflow-y:auto}
 .ac{border-left:4px solid #e5e7eb;border-radius:12px;background:white;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
-.live{border-left-color:#16a34a;background:#f0fdf4}
+.live-card{border-left-color:#16a34a;background:#f0fdf4}
 .sbox{background:white;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.07)}
-.dot{display:inline-block;width:8px;height:8px;background:#16a34a;border-radius:50%}
+.dot{display:inline-block;width:8px;height:8px;background:#16a34a;border-radius:50%;margin-right:4px}
 .irow{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;background:#f9fafb;border-radius:9px;margin-bottom:6px}
 .tabs{display:flex;gap:4px;margin-bottom:16px;background:white;border-radius:12px;padding:4px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .tab{flex:1;padding:9px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#6b7280}
 .tab.on{background:#16a34a;color:white}
+.valor-row{margin-top:10px;padding-top:10px;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style>
 </head>
 <body>
 <div id="app" style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:52px">🧹</div>
 <script>
 firebase.initializeApp({
-  apiKey:"AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
-  authDomain:"lavanderia-limpieza.firebaseapp.com",
-  projectId:"lavanderia-limpieza",
-  storageBucket:"lavanderia-limpieza.firebasestorage.app",
-  messagingSenderId:"229695150868",
-  appId:"1:229695150868:web:082157b403bcef987b8001"
+  apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
+  authDomain: "lavanderia-limpieza.firebaseapp.com",
+  projectId: "lavanderia-limpieza",
+  storageBucket: "lavanderia-limpieza.firebasestorage.app",
+  messagingSenderId: "229695150868",
+  appId: "1:229695150868:web:082157b403bcef987b8001"
 });
 var db = firebase.firestore();
 
@@ -54,12 +56,12 @@ var PASS = "admin2024";
 
 var S = {
   screen:"home", worker:"", apt:"",
-  aptList: DEF_APTS.slice(), workerList: DEF_WORKERS.slice(),
+  aptList:DEF_APTS.slice(), workerList:DEF_WORKERS.slice(),
   sessionId:null, sessionStart:null, elapsed:0,
   novedades:[], entryMedia:[], danosMedia:[], exitMedia:[],
-  showModal:false, showNovForm:false,
+  showModal:false, showNovForm:false, novDraft:"",
   lastRec:null, adminRecs:[], adminUnsub:null, timerInt:null,
-  adminError:"", tab:"apts",
+  adminError:"", tab:"apts", newItem:"",
   fDate:"", fWorker:"", fApt:""
 };
 
@@ -68,6 +70,7 @@ function fmtDate(d){ return new Date(d).toLocaleDateString("es-CO",{day:"2-digit
 function fmtHour(d){ return new Date(d).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}); }
 function nowTime(){ return new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); }
 function toDate(t){ return t&&t.toDate?t.toDate():(t?new Date(t):new Date()); }
+function pesos(v){ return "$"+Number(v||0).toLocaleString("es-CO"); }
 
 function mgrid(items){
   if(!items.length) return "";
@@ -84,35 +87,30 @@ function novHTML(list){
   });
   return h;
 }
+function mediaBtns(onVideo,onPhoto,vidClass,photoClass){
+  return '<div class="grid2">'+
+    '<label class="btn '+vidClass+'" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">Video<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="'+onVideo+'"></label>'+
+    '<label class="btn '+photoClass+'" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">Foto<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="'+onPhoto+'"></label>'+
+    '</div>';
+}
 
+// Firebase
 function loadConfig(){
-  return db.collection("config").doc("apartamentos").get().then(function(d){
-    if(d.exists) S.aptList = d.data().list;
+  db.collection("config").doc("apartamentos").get().then(function(d){
+    if(d.exists) S.aptList=d.data().list;
     return db.collection("config").doc("trabajadores").get();
   }).then(function(d){
-    if(d.exists) S.workerList = d.data().list;
-  }).catch(function(){});
+    if(d.exists) S.workerList=d.data().list;
+    S.screen="home"; render();
+  }).catch(function(){ S.screen="home"; render(); });
 }
-function saveApts(list){
-  S.aptList=list;
-  db.collection("config").doc("apartamentos").set({list:list}).catch(function(){});
-  render();
-}
-function saveWorkers(list){
-  S.workerList=list;
-  db.collection("config").doc("trabajadores").set({list:list}).catch(function(){});
-  render();
-}
-function saveValor(id, valor){
-  db.collection("limpiezas").doc(id).update({valor:valor}).catch(function(){});
-  S.adminRecs.forEach(function(r){ if(r.id===id) r.valor=valor; });
-}
+function saveApts(list){ S.aptList=list; db.collection("config").doc("apartamentos").set({list:list}); render(); }
+function saveWorkers(list){ S.workerList=list; db.collection("config").doc("trabajadores").set({list:list}); render(); }
 function createDoc(){
   return db.collection("limpiezas").add({
     worker:S.worker, apt:S.apt,
     startTime:firebase.firestore.Timestamp.now(),
-    status:"active", novedades:[],
-    entryCount:0, danosCount:0, exitCount:0, duration:0
+    status:"active", novedades:[], entryCount:0, danosCount:0, exitCount:0, duration:0, valor:0
   }).then(function(d){ return d.id; });
 }
 function patchDoc(data){
@@ -120,30 +118,32 @@ function patchDoc(data){
   db.collection("limpiezas").doc(S.sessionId).update(data).catch(function(){});
 }
 function closeDoc(){
-  return patchDoc({
-    status:"completed",
-    endTime:firebase.firestore.Timestamp.now(),
-    duration:S.elapsed, novedades:S.novedades,
-    entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length
-  });
+  patchDoc({status:"completed", endTime:firebase.firestore.Timestamp.now(), duration:S.elapsed,
+    novedades:S.novedades, entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length});
 }
 function subscribeAdmin(){
   if(S.adminUnsub) S.adminUnsub();
-  S.adminUnsub = db.collection("limpiezas").orderBy("startTime","desc").limit(100)
+  S.adminUnsub=db.collection("limpiezas").orderBy("startTime","desc").limit(200)
     .onSnapshot(function(snap){
-      S.adminRecs = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+      S.adminRecs=snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
       if(S.screen==="admin") render();
-    }, function(){});
+    },function(){});
+}
+function saveValor(id,valor){
+  db.collection("limpiezas").doc(id).update({valor:valor}).catch(function(){});
+  S.adminRecs.forEach(function(r){ if(r.id===id) r.valor=valor; });
 }
 
-// ── PANTALLAS ──
+// Screens
 function sHome(){
-  var ao="", wo="";
+  var ao="",wo="";
   S.aptList.slice().sort().forEach(function(a){ ao+='<option value="'+a+'"'+(S.apt===a?" selected":"")+'>'+a+'</option>'; });
   S.workerList.forEach(function(w){ wo+='<option value="'+w+'"'+(S.worker===w?" selected":"")+'>'+w+'</option>'; });
   return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 12px">'+
-    '<div><div style="font-size:36px">🧹</div><h1 style="font-size:22px;font-weight:800;color:#111827;margin:6px 0 2px">Control de Limpieza</h1><p style="color:#6b7280;font-size:13px">Gestion de apartamentos</p></div>'+
-    '<button class="btn gr" style="width:auto;padding:8px 14px;margin-top:8px" onclick="go(\'settings\')">Gestion ⚙️</button></div>'+
+    '<div><div style="font-size:36px">🧹</div>'+
+    '<h1 style="font-size:22px;font-weight:800;color:#111827;margin:6px 0 2px">Control de Limpieza</h1>'+
+    '<p style="color:#6b7280;font-size:13px">Gestion de apartamentos</p></div>'+
+    '<button class="btn gr" style="width:auto;padding:8px 14px;margin-top:8px" onclick="go(\'settings\')">Gestion</button></div>'+
     '<div class="card">'+
     '<div class="lbl">TRABAJADOR</div>'+
     '<select onchange="S.worker=this.value"><option value="">Seleccionar trabajador...</option>'+wo+'</select>'+
@@ -154,12 +154,13 @@ function sHome(){
 }
 
 function sSettings(){
-  var isApts = S.tab==="apts";
-  var list = isApts ? S.aptList.slice().sort() : S.workerList.slice().sort();
-  var rows = "";
-  list.forEach(function(item, i){
-    var ri = isApts ? S.aptList.indexOf(item) : S.workerList.indexOf(item);
-    rows += '<div class="irow"><span style="font-size:14px;font-weight:500">'+item+'</span>'+
+  var isApts=S.tab==="apts";
+  var src=isApts?S.aptList:S.workerList;
+  var sorted=src.slice().sort();
+  var rows="";
+  sorted.forEach(function(item){
+    var ri=src.indexOf(item);
+    rows+='<div class="irow"><span style="font-size:14px;font-weight:500">'+item+'</span>'+
       '<div style="display:flex;gap:6px">'+
       '<button onclick="editItem('+ri+')" style="background:#eff6ff;color:#2563eb;border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-weight:600;font-size:13px">Editar</button>'+
       '<button onclick="delItem('+ri+')" style="background:#fff1f2;color:#dc2626;border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:13px">Borrar</button>'+
@@ -167,68 +168,69 @@ function sSettings(){
   });
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
     '<button class="btn gr" style="width:auto;padding:6px 14px;margin-top:0" onclick="go(\'home\')">Volver</button>'+
-    '<div><h2 style="font-size:19px;color:#111827">Gestion del Sistema</h2>'+
-    '<p style="font-size:12px;color:#6b7280">Edita apartamentos y trabajadores</p></div></div>'+
+    '<div><h2 style="font-size:19px;color:#111827">Gestion</h2><p style="font-size:12px;color:#6b7280">Edita apartamentos y trabajadores</p></div></div>'+
     '<div class="tabs">'+
     '<button class="tab'+(isApts?" on":"")+'" onclick="S.tab=\'apts\';render()">Apartamentos ('+S.aptList.length+')</button>'+
     '<button class="tab'+(!isApts?" on":"")+'" onclick="S.tab=\'workers\';render()">Trabajadores ('+S.workerList.length+')</button>'+
     '</div>'+
-    '<div class="card"><div class="lbl">AGREGAR NUEVO '+(isApts?"APARTAMENTO":"TRABAJADOR")+'</div>'+
-    '<div style="display:flex;gap:8px"><input type="text" id="ni" placeholder="'+(isApts?"Ej: 2802 TCG":"Ej: Carlos Perez")+'" style="flex:1;margin:0">'+
+    '<div class="card"><div class="lbl">AGREGAR '+(isApts?"APARTAMENTO":"TRABAJADOR")+'</div>'+
+    '<div style="display:flex;gap:8px">'+
+    '<input type="text" id="ni" placeholder="'+(isApts?"Ej: 2802 TCG":"Ej: Carlos Perez")+'" style="flex:1;margin:0" value="'+S.newItem+'" oninput="S.newItem=this.value" onkeydown="if(event.key===\'Enter\')addItem()">'+
     '<button onclick="addItem()" style="background:#16a34a;color:white;border:none;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:18px">+</button></div></div>'+
     '<div class="card"><div class="lbl">LISTA</div>'+rows+'</div>';
 }
 
 function sActive(){
+  var novForm=S.showNovForm?
+    '<textarea id="novta" placeholder="Escribir novedad..." style="height:80px;resize:none;margin-top:6px" oninput="S.novDraft=this.value">'+S.novDraft+'</textarea>'+
+    '<button class="btn g" style="margin-top:6px" onclick="submitNov()">Guardar</button>'+
+    '<button class="btn gr" style="margin-top:6px" onclick="S.showNovForm=false;S.novDraft=\'\';render()">Cancelar</button>':
+    '<button class="btn o" style="margin-top:0" onclick="S.showNovForm=true;render()">+ Agregar Novedad</button>';
+
+  var modal=S.showModal?
+    '<div class="overlay"><div class="mbox">'+
+    '<div style="text-align:center;margin-bottom:16px"><div style="font-size:40px">&#128682;</div>'+
+    '<h3 style="margin:8px 0 4px">Evidencia de Salida</h3>'+
+    '<p style="color:#6b7280;font-size:14px">Graba o toma fotos del estado final</p></div>'+
+    mediaBtns("addMedia(this.files,'exit')","addMedia(this.files,'exit')","g","og")+
+    mgrid(S.exitMedia)+
+    '<button class="btn r" style="padding:14px;margin-top:14px" onclick="finalizarLimpieza()">Confirmar Finalizacion</button>'+
+    '<button class="btn gr" style="margin-top:8px" onclick="S.showModal=false;render()">Cancelar</button>'+
+    '</div></div>':"";
+
   return '<div style="background:linear-gradient(135deg,#16a34a,#15803d);border-radius:16px;padding:20px;color:white;margin-bottom:12px;text-align:center">'+
     '<div style="font-size:11px;font-weight:700;opacity:.85;margin-bottom:4px">LIMPIEZA EN CURSO</div>'+
     '<div style="font-size:18px;font-weight:800;margin-bottom:2px">'+S.apt+'</div>'+
     '<div style="font-size:14px;opacity:.85;margin-bottom:14px">'+S.worker+'</div>'+
     '<div id="tmr" style="font-size:50px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:2px;line-height:1">'+fmt(S.elapsed)+'</div>'+
-    '<div style="font-size:12px;opacity:.75;margin-top:6px">Inicio: '+fmtHour(S.sessionStart)+'</div></div>'+
+    '<div style="font-size:12px;opacity:.75;margin-top:6px">'+(S.sessionStart?"Inicio: "+fmtHour(S.sessionStart):"")+'</div></div>'+
 
     '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:15px">Evidencia de Entrada</span><span class="bdg" style="background:#eff6ff;color:#2563eb">'+S.entryMedia.length+'</span></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-    '<label class="btn b" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">Video Entrada<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'entry\')"></label>'+
-    '<label class="btn ob" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">Foto Entrada<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'entry\')"></label>'+
-    '</div>'+mgrid(S.entryMedia)+'</div>'+
+    '<span style="font-weight:700;font-size:15px">Evidencia de Entrada</span>'+
+    '<span class="bdg" style="background:#eff6ff;color:#2563eb">'+S.entryMedia.length+'</span></div>'+
+    mediaBtns("addMedia(this.files,'entry')","addMedia(this.files,'entry')","b","ob")+
+    mgrid(S.entryMedia)+'</div>'+
 
     '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
-    '<span style="font-weight:700;font-size:15px">Novedades</span><span class="bdg" style="background:#fef3c7;color:#d97706">'+S.novedades.length+'</span></div>'+
-    novHTML(S.novedades)+
-    (S.showNovForm?
-      '<textarea id="novta" placeholder="Escribir novedad..." style="height:80px;resize:none;margin-top:6px"></textarea>'+
-      '<button class="btn g" style="margin-top:6px" onclick="submitNov()">Guardar</button>'+
-      '<button class="btn gr" style="margin-top:6px" onclick="S.showNovForm=false;render()">Cancelar</button>':
-      '<button class="btn o" style="margin-top:0" onclick="S.showNovForm=true;render()">+ Agregar Novedad</button>')+
-    '</div>'+
+    '<span style="font-weight:700;font-size:15px">Novedades</span>'+
+    '<span class="bdg" style="background:#fef3c7;color:#d97706">'+S.novedades.length+'</span></div>'+
+    novHTML(S.novedades)+novForm+'</div>'+
 
     '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:15px">Evidencia de Danos</span><span class="bdg" style="background:#fff1f2;color:#dc2626">'+S.danosMedia.length+'</span></div>'+
-    '<label class="btn r" style="margin-top:0;cursor:pointer">Fotografiar Dano<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'danos\')"></label>'+
+    '<span style="font-weight:700;font-size:15px">Evidencia de Danos</span>'+
+    '<span class="bdg" style="background:#fff1f2;color:#dc2626">'+S.danosMedia.length+'</span></div>'+
+    '<label class="btn r" style="margin-top:0;cursor:pointer">Fotografiar Dano'+
+    '<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'danos\')"></label>'+
     mgrid(S.danosMedia)+'</div>'+
 
     '<button class="btn r" style="padding:15px;font-size:16px;margin-top:4px" onclick="S.showModal=true;render()">Finalizar Limpieza</button>'+
-
-    (S.showModal?'<div class="overlay"><div class="mbox">'+
-    '<div style="text-align:center;margin-bottom:16px">'+
-    '<div style="font-size:40px">Salida</div>'+
-    '<h3 style="margin:8px 0 4px">Evidencia de Salida</h3>'+
-    '<p style="color:#6b7280;font-size:14px">Graba o toma fotos del estado final</p></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-    '<label class="btn g" style="margin-top:0;font-size:13px;cursor:pointer">Video Salida<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'exit\')"></label>'+
-    '<label class="btn og" style="margin-top:0;font-size:13px;cursor:pointer">Foto Salida<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,\'exit\')"></label>'+
-    '</div>'+mgrid(S.exitMedia)+
-    '<button class="btn r" style="padding:14px;margin-top:14px" onclick="finalizarLimpieza()">Confirmar Finalizacion</button>'+
-    '<button class="btn gr" style="margin-top:8px" onclick="S.showModal=false;render()">Cancelar</button>'+
-    '</div></div>':'');
+    modal;
 }
 
 function sSummary(){
-  var r = S.lastRec; if(!r) return "";
+  var r=S.lastRec; if(!r) return "";
   return '<div style="text-align:center;padding:24px 0 16px">'+
-    '<div style="font-size:56px">✅</div>'+
+    '<div style="font-size:56px">&#9989;</div>'+
     '<h2 style="margin:10px 0 4px;color:#16a34a;font-size:22px">Limpieza Completada</h2>'+
     '<p style="color:#6b7280;font-size:14px">'+fmtDate(r.endTime)+'</p></div>'+
     '<div class="card">'+
@@ -236,115 +238,106 @@ function sSummary(){
     '<div class="row"><span style="color:#6b7280;font-size:14px">Apartamento</span><span style="font-weight:700">'+r.apt+'</span></div>'+
     '<div class="row"><span style="color:#6b7280;font-size:14px">Duracion</span><span style="font-weight:800;color:#16a34a;font-size:18px">'+fmt(r.duration)+'</span></div>'+
     '<div class="row"><span style="color:#6b7280;font-size:14px">Inicio</span><span style="font-weight:700">'+fmtHour(r.startTime)+'</span></div>'+
-    '<div class="row"><span style="color:#6b7280;font-size:14px">Fin</span><span style="font-weight:700">'+fmtHour(r.endTime)+'</span></div>'+
-    '<div class="row"><span style="color:#6b7280;font-size:14px">Archivos entrada</span><span style="font-weight:700">'+r.entryCount+'</span></div>'+
-    '<div class="row"><span style="color:#6b7280;font-size:14px">Fotos danos</span><span style="font-weight:700">'+r.danosCount+'</span></div>'+
-    '<div class="row" style="border:none"><span style="color:#6b7280;font-size:14px">Archivos salida</span><span style="font-weight:700">'+r.exitCount+'</span></div></div>'+
+    '<div class="row" style="border:none"><span style="color:#6b7280;font-size:14px">Fin</span><span style="font-weight:700">'+fmtHour(r.endTime)+'</span></div></div>'+
     (r.novedades.length?'<div class="card"><div style="font-weight:700;margin-bottom:10px">Novedades</div>'+novHTML(r.novedades)+'</div>':'')+
+    (S.entryMedia.length?'<div class="card"><div style="font-weight:700;margin-bottom:8px">Entrada</div>'+mgrid(S.entryMedia)+'</div>':'')+
+    (S.danosMedia.length?'<div class="card"><div style="font-weight:700;margin-bottom:8px">Danos</div>'+mgrid(S.danosMedia)+'</div>':'')+
+    (S.exitMedia.length?'<div class="card"><div style="font-weight:700;margin-bottom:8px">Salida</div>'+mgrid(S.exitMedia)+'</div>':'')+
     '<button class="btn g" style="padding:14px;font-size:16px;margin-top:0" onclick="goHome()">Nueva Limpieza</button>'+
     '<button class="btn b" style="margin-top:10px" onclick="go(\'adminLogin\')">Ver Panel Admin</button>';
 }
 
 function sAdminLogin(){
   return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh">'+
-    '<div style="font-size:52px;margin-bottom:16px">🔐</div>'+
+    '<div style="font-size:52px;margin-bottom:16px">&#128274;</div>'+
     '<h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:6px">Panel de Administrador</h2>'+
     '<p style="color:#6b7280;font-size:14px;margin-bottom:24px">Ingresa la contrasena para continuar</p>'+
-    '<div class="card" style="width:100%">'+
-    '<div class="lbl">CONTRASENA</div>'+
+    '<div class="card" style="width:100%"><div class="lbl">CONTRASENA</div>'+
     '<input type="password" id="ap" placeholder="..." onkeydown="if(event.key===\'Enter\')checkPass()" style="font-size:18px;letter-spacing:4px">'+
     (S.adminError?'<div style="color:#dc2626;font-size:13px;margin-bottom:8px;font-weight:600">'+S.adminError+'</div>':'')+
     '<button class="btn b" style="margin-top:4px" onclick="checkPass()">Entrar</button></div>'+
-    '<button class="btn gr" style="width:auto;padding:8px 20px;margin-top:16px" onclick="go(\'home\')">Volver</button></div>';
+    '<button onclick="go(\'home\')" style="background:none;border:none;color:#6b7280;margin-top:16px;cursor:pointer;font-size:14px">Volver</button></div>';
 }
 
 function sAdmin(){
-  var live = S.adminRecs.filter(function(r){return r.status==="active";});
-  var done = S.adminRecs.filter(function(r){return r.status==="completed";});
-  var todayStr = new Date().toDateString();
-  var todayDone = done.filter(function(r){return toDate(r.endTime).toDateString()===todayStr;});
-  var total = todayDone.reduce(function(a,r){return a+r.duration;},0);
-  var avgDur = todayDone.length ? Math.round(total/todayDone.length) : 0;
+  var live=S.adminRecs.filter(function(r){return r.status==="active";});
+  var done=S.adminRecs.filter(function(r){return r.status==="completed";});
+  var todayStr=new Date().toDateString();
+  var todayDone=done.filter(function(r){return toDate(r.endTime).toDateString()===todayStr;});
+  var avgDur=todayDone.length?Math.round(todayDone.reduce(function(a,r){return a+r.duration;},0)/todayDone.length):0;
+  var totalHoy=todayDone.reduce(function(a,r){return a+(r.valor||0);},0);
 
-  // Filtros
-  var fDate = S.fDate||"", fWorker = S.fWorker||"", fApt = S.fApt||"";
-  var filtered = done.filter(function(r){
-    var e = toDate(r.endTime);
-    var dateStr = e.toISOString().slice(0,10);
-    if(fDate && dateStr!==fDate) return false;
-    if(fWorker && r.worker!==fWorker) return false;
-    if(fApt && r.apt!==fApt) return false;
+  var fDate=S.fDate, fWorker=S.fWorker, fApt=S.fApt;
+  var filtered=done.filter(function(r){
+    if(fDate&&toDate(r.endTime).toISOString().slice(0,10)!==fDate) return false;
+    if(fWorker&&r.worker!==fWorker) return false;
+    if(fApt&&r.apt!==fApt) return false;
     return true;
   });
 
-  var totalHoy = todayDone.reduce(function(a,r){return a+(r.valor||0);},0);
-
-  // Opciones únicas para selects
-  var workers = [], apts = [];
-  done.forEach(function(r){
-    if(workers.indexOf(r.worker)<0) workers.push(r.worker);
-    if(apts.indexOf(r.apt)<0) apts.push(r.apt);
-  });
+  var workers=[],apts=[];
+  done.forEach(function(r){if(workers.indexOf(r.worker)<0)workers.push(r.worker);if(apts.indexOf(r.apt)<0)apts.push(r.apt);});
   workers.sort(); apts.sort();
 
-  var lH = "";
+  var wOpts='<option value="">Todos los trabajadores</option>';
+  workers.forEach(function(w){wOpts+='<option value="'+w+'"'+(fWorker===w?" selected":"")+'>'+w+'</option>';});
+  var aOpts='<option value="">Todos los apartamentos</option>';
+  apts.forEach(function(a){aOpts+='<option value="'+a+'"'+(fApt===a?" selected":"")+'>'+a+'</option>';});
+
+  var lH="";
   live.forEach(function(r){
-    lH += '<div class="ac live">'+
+    lH+='<div class="ac live-card">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
       '<div><div style="font-weight:700;font-size:15px">'+r.apt+'</div>'+
       '<div style="font-size:13px;color:#6b7280;margin-top:2px">'+r.worker+'</div>'+
       '<div style="font-size:12px;color:#9ca3af;margin-top:2px">Inicio: '+fmtHour(toDate(r.startTime))+'</div></div>'+
-      '<div style="background:#dcfce7;color:#16a34a;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700"><span class="dot"></span> ACTIVO</div></div>'+
+      '<div style="background:#dcfce7;color:#16a34a;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700"><span class="dot"></span>ACTIVO</div></div>'+
       (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #bbf7d0">'+novHTML(r.novedades)+'</div>':'')+
       '</div>';
   });
 
-  var dH = "";
+  var dH="";
   filtered.forEach(function(r){
-    var s=toDate(r.startTime), e=toDate(r.endTime);
-    dH += '<div class="ac">'+
+    var s=toDate(r.startTime),e=toDate(r.endTime);
+    var totalArch=(r.entryCount||0)+(r.danosCount||0)+(r.exitCount||0);
+    dH+='<div class="ac">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
       '<div><div style="font-weight:700;font-size:15px">'+r.apt+'</div>'+
       '<div style="font-size:13px;color:#6b7280;margin-top:2px">'+r.worker+'</div>'+
       '<div style="font-size:12px;color:#9ca3af;margin-top:2px">'+fmtDate(e)+' '+fmtHour(s)+'-'+fmtHour(e)+'</div></div>'+
       '<div style="text-align:right"><div style="font-weight:900;color:#16a34a;font-size:18px">'+fmt(r.duration||0)+'</div>'+
-      '<div style="font-size:11px;color:#9ca3af;margin-top:3px">'+((r.entryCount||0)+(r.danosCount||0)+(r.exitCount||0))+' arch, '+(r.novedades?r.novedades.length:0)+' nov</div></div></div>'+
+      '<div style="font-size:11px;color:#9ca3af;margin-top:3px">'+totalArch+' arch - '+(r.novedades?r.novedades.length:0)+' nov</div></div></div>'+
       (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6">'+novHTML(r.novedades)+'</div>':'')+
-      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:8px">'+
+      '<div class="valor-row">'+
       '<span style="font-size:13px;color:#6b7280;font-weight:600;white-space:nowrap">Valor $</span>'+
       '<input type="number" value="'+(r.valor||"")+'" placeholder="0" min="0" '+
       'onchange="saveValor(\''+r.id+'\',Number(this.value))" '+
       'style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid #e5e7eb;font-size:14px;font-weight:700;color:#16a34a;margin:0">'+
-      (r.valor?'<span style="font-size:13px;font-weight:800;color:#16a34a;white-space:nowrap">
+      (r.valor?'<span style="font-size:14px;font-weight:800;color:#16a34a;white-space:nowrap">'+pesos(r.valor)+'</span>':'')+
+      '</div></div>';
   });
 
-  var wOpts='<option value="">Todos los trabajadores</option>';
-  workers.forEach(function(w){wOpts+='<option value="'+w+'"'+(fWorker===w?" selected":"")+'>'+w+'</option>';});
-  var aOpts='<option value="">Todos los apartamentos</option>';
-  apts.forEach(function(a){aOpts+='<option value="'+a+'"'+(fApt===a?" selected":"")+'>'+a+'</option>';});
-  var activos = (fDate||fWorker||fApt);
-
+  var hayFiltros=fDate||fWorker||fApt;
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
     '<button class="btn gr" style="width:auto;padding:6px 14px;margin-top:0" onclick="leaveAdmin()">Volver</button>'+
     '<div><h2 style="font-size:19px;color:#111827">Panel Admin</h2>'+
-    '<p style="font-size:12px;color:#6b7280">Tiempo real - Firebase</p></div></div>'+
-    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px">'+
+    '<p style="font-size:12px;color:#6b7280">Tiempo real</p></div></div>'+
+
+    '<div class="grid2" style="margin-bottom:8px">'+
     '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#16a34a">'+live.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">EN CURSO</div></div>'+
-    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#2563eb">'+todayDone.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div>'+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">'+
+    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#2563eb">'+todayDone.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div></div>'+
+    '<div class="grid2" style="margin-bottom:12px">'+
     '<div class="sbox"><div style="font-size:18px;font-weight:900;color:#d97706">'+fmt(avgDur)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">PROMEDIO</div></div>'+
-    '<div class="sbox"><div style="font-size:16px;font-weight:900;color:#7c3aed">
+    '<div class="sbox"><div style="font-size:16px;font-weight:900;color:#7c3aed">'+pesos(totalHoy)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">INGRESOS HOY</div></div></div>'+
 
     '<div class="card" style="margin-bottom:12px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
     '<span style="font-weight:700;font-size:14px">Filtros</span>'+
-    (activos?'<button onclick="S.fDate=\'\';S.fWorker=\'\';S.fApt=\'\';render()" style="background:#fff1f2;color:#dc2626;border:none;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">Limpiar filtros</button>':'')+
+    (hayFiltros?'<button onclick="S.fDate=\'\';S.fWorker=\'\';S.fApt=\'\';render()" style="background:#fff1f2;color:#dc2626;border:none;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">Limpiar</button>':'')+
     '</div>'+
-    '<input type="date" id="fd" value="'+fDate+'" onchange="S.fDate=this.value;render()" style="margin-bottom:8px">'+
+    '<input type="date" value="'+fDate+'" onchange="S.fDate=this.value;render()" style="margin-bottom:8px">'+
     '<select onchange="S.fWorker=this.value;render()" style="margin-bottom:8px">'+wOpts+'</select>'+
-    '<select onchange="S.fApt=this.value;render()">'+aOpts+'</select>'+
-    '</div>'+
+    '<select onchange="S.fApt=this.value;render()" style="margin-bottom:0">'+aOpts+'</select></div>'+
 
     (live.length?'<div class="lbl" style="margin-bottom:8px">EN CURSO ('+live.length+')</div>'+lH:'')+
     '<div class="lbl" style="margin-bottom:8px;margin-top:4px">HISTORIAL ('+filtered.length+' de '+done.length+')</div>'+
@@ -352,8 +345,8 @@ function sAdmin(){
 }
 
 function render(){
-  var sc = {home:sHome,settings:sSettings,active:sActive,summary:sSummary,adminLogin:sAdminLogin,admin:sAdmin};
-  document.getElementById("app").innerHTML = (sc[S.screen]||sHome)();
+  var screens={home:sHome,settings:sSettings,active:sActive,summary:sSummary,adminLogin:sAdminLogin,admin:sAdmin};
+  document.getElementById("app").innerHTML=(screens[S.screen]||sHome)();
 }
 function go(s){ S.screen=s; render(); }
 
@@ -361,7 +354,7 @@ function startCleaning(){
   if(!S.worker||!S.apt) return;
   S.sessionStart=new Date(); S.elapsed=0;
   S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
-  S.showModal=false; S.showNovForm=false;
+  S.showModal=false; S.showNovForm=false; S.novDraft="";
   go("active");
   createDoc().then(function(id){ S.sessionId=id; });
   clearInterval(S.timerInt);
@@ -383,23 +376,19 @@ function addMedia(files,type){
 }
 
 function submitNov(){
-  var ta=document.getElementById("novta");
-  var text=ta&&ta.value.trim();
+  var text=S.novDraft.trim();
   if(!text) return;
   S.novedades.push({text:text,time:nowTime()});
-  S.showNovForm=false; render();
+  S.showNovForm=false; S.novDraft=""; render();
   patchDoc({novedades:S.novedades});
 }
 
 function finalizarLimpieza(){
   clearInterval(S.timerInt);
   closeDoc();
-  S.lastRec={
-    worker:S.worker, apt:S.apt,
-    startTime:S.sessionStart, endTime:new Date(),
-    duration:S.elapsed, novedades:S.novedades,
-    entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length
-  };
+  S.lastRec={worker:S.worker,apt:S.apt,startTime:S.sessionStart,endTime:new Date(),
+    duration:S.elapsed,novedades:S.novedades,
+    entryCount:S.entryMedia.length,danosCount:S.danosMedia.length,exitCount:S.exitMedia.length};
   S.showModal=false; go("summary");
 }
 
@@ -422,412 +411,28 @@ function leaveAdmin(){ if(S.adminUnsub){S.adminUnsub();S.adminUnsub=null;} go("h
 
 function addItem(){
   var el=document.getElementById("ni");
-  var v=el&&el.value.trim().toUpperCase();
+  var v=el&&el.value.trim();
   if(!v) return;
-  if(S.tab==="apts") saveApts(S.aptList.concat([v]));
+  if(S.tab==="apts") saveApts(S.aptList.concat([v.toUpperCase()]));
   else saveWorkers(S.workerList.concat([v]));
+  S.newItem="";
   if(el) el.value="";
 }
 function editItem(ri){
-  var isApts=S.tab==="apts";
-  var orig=(isApts?S.aptList:S.workerList)[ri];
-  var v=prompt("Editar:",orig);
+  var src=S.tab==="apts"?S.aptList:S.workerList;
+  var v=prompt("Editar:",src[ri]);
   if(!v||!v.trim()) return;
-  if(isApts){ var la=S.aptList.slice(); la[ri]=v.trim().toUpperCase(); saveApts(la); }
-  else { var lw=S.workerList.slice(); lw[ri]=v.trim(); saveWorkers(lw); }
+  var updated=src.map(function(x,i){return i===ri?v.trim():x;});
+  if(S.tab==="apts") saveApts(updated); else saveWorkers(updated);
 }
 function delItem(ri){
-  var isApts=S.tab==="apts";
-  var name=(isApts?S.aptList:S.workerList)[ri];
-  if(confirm("Eliminar: "+name+"?")){
-    if(isApts) saveApts(S.aptList.filter(function(_,i){return i!==ri;}));
-    else saveWorkers(S.workerList.filter(function(_,i){return i!==ri;}));
-  }
+  var src=S.tab==="apts"?S.aptList:S.workerList;
+  if(!confirm("Eliminar: "+src[ri]+"?")) return;
+  var updated=src.filter(function(_,i){return i!==ri;});
+  if(S.tab==="apts") saveApts(updated); else saveWorkers(updated);
 }
 
-loadConfig().then(function(){ render(); });
-</script>
-</body>
-</html>
-+Number(r.valor).toLocaleString("es-CO")+'</span>':'')+
-      '</div>'+
-      '</div>';
-  });
-
-  var wOpts='<option value="">Todos los trabajadores</option>';
-  workers.forEach(function(w){wOpts+='<option value="'+w+'"'+(fWorker===w?" selected":"")+'>'+w+'</option>';});
-  var aOpts='<option value="">Todos los apartamentos</option>';
-  apts.forEach(function(a){aOpts+='<option value="'+a+'"'+(fApt===a?" selected":"")+'>'+a+'</option>';});
-  var activos = (fDate||fWorker||fApt);
-
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
-    '<button class="btn gr" style="width:auto;padding:6px 14px;margin-top:0" onclick="leaveAdmin()">Volver</button>'+
-    '<div><h2 style="font-size:19px;color:#111827">Panel Admin</h2>'+
-    '<p style="font-size:12px;color:#6b7280">Tiempo real - Firebase</p></div></div>'+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
-    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#16a34a">'+live.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">EN CURSO</div></div>'+
-    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#2563eb">'+todayDone.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div>'+
-    '<div class="sbox"><div style="font-size:18px;font-weight:900;color:#d97706">'+fmt(avgDur)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">PROMEDIO</div></div></div>'+
-
-    '<div class="card" style="margin-bottom:12px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:14px">Filtros</span>'+
-    (activos?'<button onclick="S.fDate=\'\';S.fWorker=\'\';S.fApt=\'\';render()" style="background:#fff1f2;color:#dc2626;border:none;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">Limpiar filtros</button>':'')+
-    '</div>'+
-    '<input type="date" id="fd" value="'+fDate+'" onchange="S.fDate=this.value;render()" style="margin-bottom:8px">'+
-    '<select onchange="S.fWorker=this.value;render()" style="margin-bottom:8px">'+wOpts+'</select>'+
-    '<select onchange="S.fApt=this.value;render()">'+aOpts+'</select>'+
-    '</div>'+
-
-    (live.length?'<div class="lbl" style="margin-bottom:8px">EN CURSO ('+live.length+')</div>'+lH:'')+
-    '<div class="lbl" style="margin-bottom:8px;margin-top:4px">HISTORIAL ('+filtered.length+' de '+done.length+')</div>'+
-    (!filtered.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros para estos filtros</p>':dH);
-}
-
-function render(){
-  var sc = {home:sHome,settings:sSettings,active:sActive,summary:sSummary,adminLogin:sAdminLogin,admin:sAdmin};
-  document.getElementById("app").innerHTML = (sc[S.screen]||sHome)();
-}
-function go(s){ S.screen=s; render(); }
-
-function startCleaning(){
-  if(!S.worker||!S.apt) return;
-  S.sessionStart=new Date(); S.elapsed=0;
-  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
-  S.showModal=false; S.showNovForm=false;
-  go("active");
-  createDoc().then(function(id){ S.sessionId=id; });
-  clearInterval(S.timerInt);
-  S.timerInt=setInterval(function(){
-    S.elapsed++;
-    var t=document.getElementById("tmr");
-    if(t) t.textContent=fmt(S.elapsed);
-  },1000);
-}
-
-function addMedia(files,type){
-  var map={entry:S.entryMedia,danos:S.danosMedia,exit:S.exitMedia};
-  var arr=map[type];
-  Array.from(files).forEach(function(f){
-    var rd=new FileReader();
-    rd.onload=function(e){ arr.push({url:e.target.result,isVideo:f.type.startsWith("video")}); render(); };
-    rd.readAsDataURL(f);
-  });
-}
-
-function submitNov(){
-  var ta=document.getElementById("novta");
-  var text=ta&&ta.value.trim();
-  if(!text) return;
-  S.novedades.push({text:text,time:nowTime()});
-  S.showNovForm=false; render();
-  patchDoc({novedades:S.novedades});
-}
-
-function finalizarLimpieza(){
-  clearInterval(S.timerInt);
-  closeDoc();
-  S.lastRec={
-    worker:S.worker, apt:S.apt,
-    startTime:S.sessionStart, endTime:new Date(),
-    duration:S.elapsed, novedades:S.novedades,
-    entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length
-  };
-  S.showModal=false; go("summary");
-}
-
-function goHome(){
-  clearInterval(S.timerInt);
-  S.screen="home"; S.sessionId=null; S.worker=""; S.apt=""; S.elapsed=0;
-  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
-  render();
-}
-
-function checkPass(){
-  var el=document.getElementById("ap");
-  if(el&&el.value===PASS){
-    S.adminError=""; S.screen="admin"; render(); subscribeAdmin();
-  } else {
-    S.adminError="Contrasena incorrecta"; render();
-  }
-}
-function leaveAdmin(){ if(S.adminUnsub){S.adminUnsub();S.adminUnsub=null;} go("home"); }
-
-function addItem(){
-  var el=document.getElementById("ni");
-  var v=el&&el.value.trim().toUpperCase();
-  if(!v) return;
-  if(S.tab==="apts") saveApts(S.aptList.concat([v]));
-  else saveWorkers(S.workerList.concat([v]));
-  if(el) el.value="";
-}
-function editItem(ri){
-  var isApts=S.tab==="apts";
-  var orig=(isApts?S.aptList:S.workerList)[ri];
-  var v=prompt("Editar:",orig);
-  if(!v||!v.trim()) return;
-  if(isApts){ var la=S.aptList.slice(); la[ri]=v.trim().toUpperCase(); saveApts(la); }
-  else { var lw=S.workerList.slice(); lw[ri]=v.trim(); saveWorkers(lw); }
-}
-function delItem(ri){
-  var isApts=S.tab==="apts";
-  var name=(isApts?S.aptList:S.workerList)[ri];
-  if(confirm("Eliminar: "+name+"?")){
-    if(isApts) saveApts(S.aptList.filter(function(_,i){return i!==ri;}));
-    else saveWorkers(S.workerList.filter(function(_,i){return i!==ri;}));
-  }
-}
-
-loadConfig().then(function(){ render(); });
-</script>
-</body>
-</html>
-+totalHoy.toLocaleString("es-CO")+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">INGRESOS HOY</div></div>'+
-    '</div>'+
-
-    '<div class="card" style="margin-bottom:12px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:14px">Filtros</span>'+
-    (activos?'<button onclick="S.fDate=\'\';S.fWorker=\'\';S.fApt=\'\';render()" style="background:#fff1f2;color:#dc2626;border:none;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">Limpiar filtros</button>':'')+
-    '</div>'+
-    '<input type="date" id="fd" value="'+fDate+'" onchange="S.fDate=this.value;render()" style="margin-bottom:8px">'+
-    '<select onchange="S.fWorker=this.value;render()" style="margin-bottom:8px">'+wOpts+'</select>'+
-    '<select onchange="S.fApt=this.value;render()">'+aOpts+'</select>'+
-    '</div>'+
-
-    (live.length?'<div class="lbl" style="margin-bottom:8px">EN CURSO ('+live.length+')</div>'+lH:'')+
-    '<div class="lbl" style="margin-bottom:8px;margin-top:4px">HISTORIAL ('+filtered.length+' de '+done.length+')</div>'+
-    (!filtered.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros para estos filtros</p>':dH);
-}
-
-function render(){
-  var sc = {home:sHome,settings:sSettings,active:sActive,summary:sSummary,adminLogin:sAdminLogin,admin:sAdmin};
-  document.getElementById("app").innerHTML = (sc[S.screen]||sHome)();
-}
-function go(s){ S.screen=s; render(); }
-
-function startCleaning(){
-  if(!S.worker||!S.apt) return;
-  S.sessionStart=new Date(); S.elapsed=0;
-  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
-  S.showModal=false; S.showNovForm=false;
-  go("active");
-  createDoc().then(function(id){ S.sessionId=id; });
-  clearInterval(S.timerInt);
-  S.timerInt=setInterval(function(){
-    S.elapsed++;
-    var t=document.getElementById("tmr");
-    if(t) t.textContent=fmt(S.elapsed);
-  },1000);
-}
-
-function addMedia(files,type){
-  var map={entry:S.entryMedia,danos:S.danosMedia,exit:S.exitMedia};
-  var arr=map[type];
-  Array.from(files).forEach(function(f){
-    var rd=new FileReader();
-    rd.onload=function(e){ arr.push({url:e.target.result,isVideo:f.type.startsWith("video")}); render(); };
-    rd.readAsDataURL(f);
-  });
-}
-
-function submitNov(){
-  var ta=document.getElementById("novta");
-  var text=ta&&ta.value.trim();
-  if(!text) return;
-  S.novedades.push({text:text,time:nowTime()});
-  S.showNovForm=false; render();
-  patchDoc({novedades:S.novedades});
-}
-
-function finalizarLimpieza(){
-  clearInterval(S.timerInt);
-  closeDoc();
-  S.lastRec={
-    worker:S.worker, apt:S.apt,
-    startTime:S.sessionStart, endTime:new Date(),
-    duration:S.elapsed, novedades:S.novedades,
-    entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length
-  };
-  S.showModal=false; go("summary");
-}
-
-function goHome(){
-  clearInterval(S.timerInt);
-  S.screen="home"; S.sessionId=null; S.worker=""; S.apt=""; S.elapsed=0;
-  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
-  render();
-}
-
-function checkPass(){
-  var el=document.getElementById("ap");
-  if(el&&el.value===PASS){
-    S.adminError=""; S.screen="admin"; render(); subscribeAdmin();
-  } else {
-    S.adminError="Contrasena incorrecta"; render();
-  }
-}
-function leaveAdmin(){ if(S.adminUnsub){S.adminUnsub();S.adminUnsub=null;} go("home"); }
-
-function addItem(){
-  var el=document.getElementById("ni");
-  var v=el&&el.value.trim().toUpperCase();
-  if(!v) return;
-  if(S.tab==="apts") saveApts(S.aptList.concat([v]));
-  else saveWorkers(S.workerList.concat([v]));
-  if(el) el.value="";
-}
-function editItem(ri){
-  var isApts=S.tab==="apts";
-  var orig=(isApts?S.aptList:S.workerList)[ri];
-  var v=prompt("Editar:",orig);
-  if(!v||!v.trim()) return;
-  if(isApts){ var la=S.aptList.slice(); la[ri]=v.trim().toUpperCase(); saveApts(la); }
-  else { var lw=S.workerList.slice(); lw[ri]=v.trim(); saveWorkers(lw); }
-}
-function delItem(ri){
-  var isApts=S.tab==="apts";
-  var name=(isApts?S.aptList:S.workerList)[ri];
-  if(confirm("Eliminar: "+name+"?")){
-    if(isApts) saveApts(S.aptList.filter(function(_,i){return i!==ri;}));
-    else saveWorkers(S.workerList.filter(function(_,i){return i!==ri;}));
-  }
-}
-
-loadConfig().then(function(){ render(); });
-</script>
-</body>
-</html>
-+Number(r.valor).toLocaleString("es-CO")+'</span>':'')+
-      '</div>'+
-      '</div>';
-  });
-
-  var wOpts='<option value="">Todos los trabajadores</option>';
-  workers.forEach(function(w){wOpts+='<option value="'+w+'"'+(fWorker===w?" selected":"")+'>'+w+'</option>';});
-  var aOpts='<option value="">Todos los apartamentos</option>';
-  apts.forEach(function(a){aOpts+='<option value="'+a+'"'+(fApt===a?" selected":"")+'>'+a+'</option>';});
-  var activos = (fDate||fWorker||fApt);
-
-  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
-    '<button class="btn gr" style="width:auto;padding:6px 14px;margin-top:0" onclick="leaveAdmin()">Volver</button>'+
-    '<div><h2 style="font-size:19px;color:#111827">Panel Admin</h2>'+
-    '<p style="font-size:12px;color:#6b7280">Tiempo real - Firebase</p></div></div>'+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
-    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#16a34a">'+live.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">EN CURSO</div></div>'+
-    '<div class="sbox"><div style="font-size:28px;font-weight:900;color:#2563eb">'+todayDone.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div>'+
-    '<div class="sbox"><div style="font-size:18px;font-weight:900;color:#d97706">'+fmt(avgDur)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">PROMEDIO</div></div></div>'+
-
-    '<div class="card" style="margin-bottom:12px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:14px">Filtros</span>'+
-    (activos?'<button onclick="S.fDate=\'\';S.fWorker=\'\';S.fApt=\'\';render()" style="background:#fff1f2;color:#dc2626;border:none;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">Limpiar filtros</button>':'')+
-    '</div>'+
-    '<input type="date" id="fd" value="'+fDate+'" onchange="S.fDate=this.value;render()" style="margin-bottom:8px">'+
-    '<select onchange="S.fWorker=this.value;render()" style="margin-bottom:8px">'+wOpts+'</select>'+
-    '<select onchange="S.fApt=this.value;render()">'+aOpts+'</select>'+
-    '</div>'+
-
-    (live.length?'<div class="lbl" style="margin-bottom:8px">EN CURSO ('+live.length+')</div>'+lH:'')+
-    '<div class="lbl" style="margin-bottom:8px;margin-top:4px">HISTORIAL ('+filtered.length+' de '+done.length+')</div>'+
-    (!filtered.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros para estos filtros</p>':dH);
-}
-
-function render(){
-  var sc = {home:sHome,settings:sSettings,active:sActive,summary:sSummary,adminLogin:sAdminLogin,admin:sAdmin};
-  document.getElementById("app").innerHTML = (sc[S.screen]||sHome)();
-}
-function go(s){ S.screen=s; render(); }
-
-function startCleaning(){
-  if(!S.worker||!S.apt) return;
-  S.sessionStart=new Date(); S.elapsed=0;
-  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
-  S.showModal=false; S.showNovForm=false;
-  go("active");
-  createDoc().then(function(id){ S.sessionId=id; });
-  clearInterval(S.timerInt);
-  S.timerInt=setInterval(function(){
-    S.elapsed++;
-    var t=document.getElementById("tmr");
-    if(t) t.textContent=fmt(S.elapsed);
-  },1000);
-}
-
-function addMedia(files,type){
-  var map={entry:S.entryMedia,danos:S.danosMedia,exit:S.exitMedia};
-  var arr=map[type];
-  Array.from(files).forEach(function(f){
-    var rd=new FileReader();
-    rd.onload=function(e){ arr.push({url:e.target.result,isVideo:f.type.startsWith("video")}); render(); };
-    rd.readAsDataURL(f);
-  });
-}
-
-function submitNov(){
-  var ta=document.getElementById("novta");
-  var text=ta&&ta.value.trim();
-  if(!text) return;
-  S.novedades.push({text:text,time:nowTime()});
-  S.showNovForm=false; render();
-  patchDoc({novedades:S.novedades});
-}
-
-function finalizarLimpieza(){
-  clearInterval(S.timerInt);
-  closeDoc();
-  S.lastRec={
-    worker:S.worker, apt:S.apt,
-    startTime:S.sessionStart, endTime:new Date(),
-    duration:S.elapsed, novedades:S.novedades,
-    entryCount:S.entryMedia.length, danosCount:S.danosMedia.length, exitCount:S.exitMedia.length
-  };
-  S.showModal=false; go("summary");
-}
-
-function goHome(){
-  clearInterval(S.timerInt);
-  S.screen="home"; S.sessionId=null; S.worker=""; S.apt=""; S.elapsed=0;
-  S.novedades=[]; S.entryMedia=[]; S.danosMedia=[]; S.exitMedia=[];
-  render();
-}
-
-function checkPass(){
-  var el=document.getElementById("ap");
-  if(el&&el.value===PASS){
-    S.adminError=""; S.screen="admin"; render(); subscribeAdmin();
-  } else {
-    S.adminError="Contrasena incorrecta"; render();
-  }
-}
-function leaveAdmin(){ if(S.adminUnsub){S.adminUnsub();S.adminUnsub=null;} go("home"); }
-
-function addItem(){
-  var el=document.getElementById("ni");
-  var v=el&&el.value.trim().toUpperCase();
-  if(!v) return;
-  if(S.tab==="apts") saveApts(S.aptList.concat([v]));
-  else saveWorkers(S.workerList.concat([v]));
-  if(el) el.value="";
-}
-function editItem(ri){
-  var isApts=S.tab==="apts";
-  var orig=(isApts?S.aptList:S.workerList)[ri];
-  var v=prompt("Editar:",orig);
-  if(!v||!v.trim()) return;
-  if(isApts){ var la=S.aptList.slice(); la[ri]=v.trim().toUpperCase(); saveApts(la); }
-  else { var lw=S.workerList.slice(); lw[ri]=v.trim(); saveWorkers(lw); }
-}
-function delItem(ri){
-  var isApts=S.tab==="apts";
-  var name=(isApts?S.aptList:S.workerList)[ri];
-  if(confirm("Eliminar: "+name+"?")){
-    if(isApts) saveApts(S.aptList.filter(function(_,i){return i!==ri;}));
-    else saveWorkers(S.workerList.filter(function(_,i){return i!==ri;}));
-  }
-}
-
-loadConfig().then(function(){ render(); });
+loadConfig();
 </script>
 </body>
 </html>
