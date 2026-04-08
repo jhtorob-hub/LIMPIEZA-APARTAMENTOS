@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Limpieza</title>
+<style>
+:root{--g:#16a34a;--r:#dc2626;--b:#2563eb;--o:#d97706;--pu:#7c3aed}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f9fafb;-webkit-tap-highlight-color:transparent}
+#app{max-width:480px;margin:0 auto;padding:16px;min-height:100vh;padding-bottom:40px}
+.card{background:white;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 16px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;color:white;font-family:inherit}
+.btn-g{background:var(--g)}.btn-r{background:var(--r)}.btn-b{background:var(--b)}.btn-o{background:var(--o)}.btn-gray{background:#9ca3af}
+.btn-out-b{background:white;color:var(--b);border:2px solid var(--b)}.btn-out-g{background:white;color:var(--g);border:2px solid var(--g)}
+select,input[type=text],input[type=password],textarea{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #e5e7eb;font-size:15px;background:white;font-family:inherit;margin-bottom:8px}
+.lbl{font-size:12px;color:#6b7280;font-weight:700;letter-spacing:.06em;margin-bottom:5px}
+.nov-item{background:#dcfce7;border-radius:9px;padding:9px 12px;margin-bottom:6px;border-left:3px solid var(--g)}
+.media-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.media-thumb{border-radius:9px;overflow:hidden;aspect-ratio:1;background:#f3f4f6}
+.media-thumb img,.media-thumb video{width:100%;height:100%;object-fit:cover}
+.badge{display:inline-block;font-size:12px;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:6px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f3f4f6}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:100}
+.modal-box{background:white;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;margin:0 auto}
+.ac{border-left:4px solid #e5e7eb;border-radius:12px;background:white;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.ac.live{border-left-color:var(--g);background:#f0fdf4}
+.pulse{display:inline-block;width:8px;height:8px;background:var(--g);border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.stat-box{background:white;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+</style>
+</head>
+<body>
+<div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh"><div style="font-size:48px;animation:pulse 1s infinite">🧹</div></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
+  authDomain:"lavanderia-limpieza.firebaseapp.com",
+  projectId:"lavanderia-limpieza",
+  storageBucket:"lavanderia-limpieza.firebasestorage.app",
+  messagingSenderId:"229695150868",
+  appId:"1:229695150868:web:082157b403bcef987b8001",
+  measurementId:"G-VZL67MJ11R"
+});
+const db = firebase.firestore();
+
+const WORKERS = ["María García","Juan López","Ana Martínez","Pedro Rodríguez","Laura Gómez"];
+const DEFAULT_APTS = [
+  "201 LAURELES TCG","302 LAURELES TCG","303 LAURELES TCG","303 MONSERRATE TCG",
+  "306 ROMULO","308 BASELOFT DIEGO CAMACHO","311 ADRIANA","405 ROMULO",
+  "501 AVENIDA DEL CERRO ALEJANDRA","501 TCG","503 BASELOFT TCG","510 SERGIO BASELOFT",
+  "712 RUFFGO","810 ADRIANA","1003 TCG","1103 TCG","1305 TCG","1402 TCG",
+  "1405 TCG","1703 TCG","1802 TCG","2105 TCG","2204 LIGIA","2404 ALEJA",
+  "2505 TCG","2701 TCG"
+];
+const ADMIN_PASS = "admin2024";
+
+const S = {
+  screen:'home', worker:'', apt:'', aptList:[...DEFAULT_APTS],
+  sessionId:null, sessionStart:null, elapsed:0,
+  novedades:[], entryMedia:[], danosMedia:[], exitMedia:[],
+  showModal:false, showNovForm:false, novDraft:'',
+  lastRec:null, adminRecs:[], adminUnsub:null, timerInt:null,
+  adminPass:'', adminError:''
+};
+
+const fmt = s => [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(x=>String(x).padStart(2,'0')).join(':');
+const fmtDate = d => new Date(d).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
+const fmtHour = d => new Date(d).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+const nowTime = () => new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const toDate = t => t?.toDate ? t.toDate() : (t ? new Date(t) : new Date());
+
+function mediaGridHTML(items){
+  if(!items.length) return '';
+  return `<div class="media-grid">${items.map(it=>
+    `<div class="media-thumb">${it.isVideo
+      ?`<video src="${it.url}" controls></video>`
+      :`<img src="${it.url}">`}</div>`
+  ).join('')}</div>`;
+}
+function novHTML(list){
+  return list.map(n=>`<div class="nov-item"><div style="font-size:12px;color:var(--g);font-weight:600;margin-bottom:2px">${n.time}</div><div style="font-size:14px">${n.text}</div></div>`).join('');
+}
+
+async function loadApts(){
+  try{const d=await db.collection('config').doc('apartamentos').get();if(d.exists)S.aptList=d.data().list;}catch(e){}
+}
+async function saveApts(list){
+  S.aptList=list;
+  try{await db.collection('config').doc('apartamentos').set({list});}catch(e){}
+  render();
+}
+async function createDoc(){
+  const d=await db.collection('limpiezas').add({
+    worker:S.worker,apt:S.apt,
+    startTime:firebase.firestore.Timestamp.now(),
+    status:'active',novedades:[],
+    entryCount:0,danosCount:0,exitCount:0,duration:0
+  });
+  return d.id;
+}
+async function patchDoc(data){
+  if(!S.sessionId) return;
+  try{await db.collection('limpiezas').doc(S.sessionId).update(data);}catch(e){}
+}
+async function closeDoc(){
+  await patchDoc({
+    status:'completed',
+    endTime:firebase.firestore.Timestamp.now(),
+    duration:S.elapsed,
+    novedades:S.novedades,
+    entryCount:S.entryMedia.length,
+    danosCount:S.danosMedia.length,
+    exitCount:S.exitMedia.length
+  });
+}
+function subscribeAdmin(){
+  if(S.adminUnsub) S.adminUnsub();
+  S.adminUnsub=db.collection('limpiezas')
+    .orderBy('startTime','desc').limit(100)
+    .onSnapshot(snap=>{
+      S.adminRecs=snap.docs.map(d=>({id:d.id,...d.data()}));
+      if(S.screen==='admin') render();
+    },err=>console.log(err));
+}
+
+function screenHome(){
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 12px">
+      <div><div style="font-size:36px">🧹</div>
+        <h1 style="margin:6px 0 2px;font-size:22px;font-weight:800;color:#111827">Control de Limpieza</h1>
+        <p style="color:#6b7280;font-size:13px">Gestión de apartamentos</p></div>
+      <button class="btn" style="width:auto;padding:8px 12px;background:white;color:#111827;border:1px solid #e5e7eb;margin-top:8px" onclick="go('settings')">⚙️</button>
+    </div>
+    <div class="card">
+      <div class="lbl">👤 TRABAJADOR</div>
+      <select onchange="S.worker=this.value">
+        <option value="">Seleccionar trabajador...</option>
+        ${WORKERS.map(w=>`<option ${S.worker===w?'selected':''}>${w}</option>`).join('')}
+      </select>
+      <div class="lbl">🏠 APARTAMENTO</div>
+      <select onchange="S.apt=this.value">
+        <option value="">Seleccionar apartamento...</option>
+        ${[...S.aptList].sort().map(a=>`<option ${S.apt===a?'selected':''}>${a}</option>`).join('')}
+      </select>
+      <button class="btn ${S.worker&&S.apt?'btn-g':'btn-gray'}" style="font-size:16px;padding:14px;margin-top:4px" onclick="startCleaning()">▶ Iniciar Limpieza</button>
+    </div>
+    <button class="btn btn-b" style="margin-top:0" onclick="go('adminLogin')">👨‍💼 Panel de Administrador</button>`;
+}
+
+function screenActive(){
+  return `
+    <div style="background:linear-gradient(135deg,#16a34a,#15803d);border-radius:16px;padding:20px;color:white;margin-bottom:12px;text-align:center">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;opacity:.85;margin-bottom:4px">🧹 LIMPIEZA EN CURSO</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:2px">${S.apt}</div>
+      <div style="font-size:14px;opacity:.85;margin-bottom:14px">👤 ${S.worker}</div>
+      <div id="tmr" style="font-size:50px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:2px;line-height:1">${fmt(S.elapsed)}</div>
+      <div style="font-size:12px;opacity:.75;margin-top:6px">Inicio: ${fmtHour(S.sessionStart)}</div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-weight:700;font-size:15px">🚪 Evidencia de Entrada</span>
+        <span class="badge" style="background:#eff6ff;color:var(--b)">${S.entryMedia.length}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label class="btn btn-b" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">🎥 Grabar Video<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'entry')"></label>
+        <label class="btn btn-out-b" style="margin-top:0;font-size:13px;padding:11px 8px;cursor:pointer">📸 Foto<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'entry')"></label>
+      </div>
+      ${mediaGridHTML(S.entryMedia)}
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-weight:700;font-size:15px">📝 Novedades</span>
+        <span class="badge" style="background:#fef3c7;color:var(--o)">${S.novedades.length}</span>
+      </div>
+      ${novHTML(S.novedades)}
+      ${S.showNovForm?`
+        <textarea id="novta" placeholder="Escribir novedad..." style="height:80px;resize:none;margin-top:6px"></textarea>
+        <button class="btn btn-g" style="margin-top:6px" onclick="submitNov()">✅ Guardar</button>
+        <button class="btn btn-gray" style="margin-top:6px" onclick="S.showNovForm=false;render()">Cancelar</button>
+      `:`<button class="btn btn-o" style="margin-top:0" onclick="S.showNovForm=true;render()">➕ Agregar Novedad</button>`}
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-weight:700;font-size:15px">⚠️ Evidencia de Daños</span>
+        <span class="badge" style="background:#fff1f2;color:var(--r)">${S.danosMedia.length}</span>
+      </div>
+      <label class="btn btn-r" style="margin-top:0;cursor:pointer">📸 Fotografiar Daño<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'danos')"></label>
+      ${mediaGridHTML(S.danosMedia)}
+    </div>
+    <button class="btn btn-r" style="padding:15px;font-size:16px;margin-top:4px" onclick="S.showModal=true;render()">⏹ Finalizar Limpieza</button>
+    ${S.showModal?`<div class="modal-overlay"><div class="modal-box">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:40px">🚪</div>
+        <h3 style="margin:8px 0 4px">Evidencia de Salida</h3>
+        <p style="color:#6b7280;font-size:14px">Graba o toma fotos del estado final</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label class="btn btn-g" style="margin-top:0;font-size:13px;cursor:pointer">🎥 Grabar Video<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'exit')"></label>
+        <label class="btn btn-out-g" style="margin-top:0;font-size:13px;cursor:pointer">📸 Foto<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addMedia(this.files,'exit')"></label>
+      </div>
+      ${mediaGridHTML(S.exitMedia)}
+      <button class="btn btn-r" style="padding:14px;margin-top:14px" onclick="finalizarLimpieza()">✅ Confirmar Finalización</button>
+      <button class="btn btn-gray" style="margin-top:8px" onclick="S.showModal=false;render()">Cancelar</button>
+    </div></div>`:''}`;
+}
+
+function screenSummary(){
+  const r=S.lastRec; if(!r) return '';
+  return `
+    <div style="text-align:center;padding:24px 0 16px">
+      <div style="font-size:56px">✅</div>
+      <h2 style="margin:10px 0 4px;color:var(--g);font-size:22px">¡Limpieza Completada!</h2>
+      <p style="color:#6b7280;font-size:14px">${fmtDate(r.endTime)}</p>
+    </div>
+    <div class="card">
+      <div class="row"><span style="color:#6b7280;font-size:14px">👤 Trabajador</span><span style="font-weight:700">${r.worker}</span></div>
+      <div class="row"><span style="color:#6b7280;font-size:14px">🏠 Apartamento</span><span style="font-weight:700">${r.apt}</span></div>
+      <div class="row"><span style="color:#6b7280;font-size:14px">⏱️ Duración</span><span style="font-weight:700;color:var(--g);font-size:18px">${fmt(r.duration)}</span></div>
+      <div class="row"><span style="color:#6b7280;font-size:14px">🕐 Inicio</span><span style="font-weight:700">${fmtHour(r.startTime)}</span></div>
+      <div class="row"><span style="color:#6b7280;font-size:14px">🕐 Fin</span><span style="font-weight:700">${fmtHour(r.endTime)}</span></div>
+      <div class="row"><span style="color:#6b7280;font-size:14px">🎥 Archivos entrada</span><span style="font-weight:700">${r.entryCount}</span></div>
+      <div class="row"><span style="color:#6b7280;font-size:14px">⚠️ Fotos daños</span><span style="font-weight:700">${r.danosCount}</span></div>
+      <div class="row"><span style="color:#6b7280;font-size:14px">🎥 Archivos salida</span><span style="font-weight:700">${r.exitCount}</span></div>
+      <div class="row" style="border:none"><span style="color:#6b7280;font-size:14px">📝 Novedades</span><span style="font-weight:700">${r.novedades.length}</span></div>
+    </div>
+    ${r.novedades.length?`<div class="card"><div style="font-weight:700;margin-bottom:10px">📝 Novedades</div>${novHTML(r.novedades)}</div>`:''}
+    ${S.entryMedia.length?`<div class="card"><div style="font-weight:700;margin-bottom:8px">🚪 Evidencia Entrada</div>${mediaGridHTML(S.entryMedia)}</div>`:''}
+    ${S.danosMedia.length?`<div class="card"><div style="font-weight:700;margin-bottom:8px">⚠️ Fotos Daños</div>${mediaGridHTML(S.danosMedia)}</div>`:''}
+    ${S.exitMedia.length?`<div class="card"><div style="font-weight:700;margin-bottom:8px">🚪 Evidencia Salida</div>${mediaGridHTML(S.exitMedia)}</div>`:''}
+    <button class="btn btn-g" style="padding:14px;font-size:16px;margin-top:0" onclick="goHome()">🏠 Nueva Limpieza</button>
+    <button class="btn btn-b" style="margin-top:10px" onclick="go('adminLogin')">👨‍💼 Ver Panel Admin</button>`;
+}
+
+function screenAdminLogin(){
+  return `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh">
+      <div style="font-size:52px;margin-bottom:16px">🔐</div>
+      <h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:6px">Panel de Administrador</h2>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:24px">Ingresa la contraseña para continuar</p>
+      <div class="card" style="width:100%;max-width:360px">
+        <div class="lbl">CONTRASEÑA</div>
+        <input type="password" id="adm-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')checkPass()" style="font-size:18px;letter-spacing:4px">
+        ${S.adminError?`<div style="color:var(--r);font-size:13px;margin-bottom:8px;font-weight:600">⚠️ ${S.adminError}</div>`:''}
+        <button class="btn btn-b" style="margin-top:4px" onclick="checkPass()">Entrar al Panel</button>
+      </div>
+      <button class="btn btn-gray" style="width:auto;padding:8px 20px;margin-top:16px" onclick="go('home')">← Volver</button>
+    </div>`;
+}
+
+function screenAdmin(){
+  const live=S.adminRecs.filter(r=>r.status==='active');
+  const done=S.adminRecs.filter(r=>r.status==='completed');
+  const todayStr=new Date().toDateString();
+  const todayDone=done.filter(r=>toDate(r.endTime).toDateString()===todayStr);
+  const avgDur=todayDone.length?Math.round(todayDone.reduce((a,r)=>a+r.duration,0)/todayDone.length):0;
+  return `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button class="btn" style="width:auto;padding:6px 14px;background:white;color:#111827;border:1px solid #e5e7eb;margin-top:0" onclick="leaveAdmin()">←</button>
+      <div>
+        <h2 style="font-size:19px;color:#111827;display:flex;align-items:center;gap:8px">👨‍💼 Panel Admin <span class="pulse"></span></h2>
+        <p style="font-size:12px;color:#6b7280">Tiempo real · Firebase</p>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+      <div class="stat-box"><div style="font-size:28px;font-weight:900;color:var(--g)">${live.length}</div><div style="font-size:11px;color:#6b7280;font-weight:700">EN CURSO</div></div>
+      <div class="stat-box"><div style="font-size:28px;font-weight:900;color:var(--b)">${todayDone.length}</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div>
+      <div class="stat-box"><div style="font-size:18px;font-weight:900;color:var(--o)">${fmt(avgDur)}</div><div style="font-size:11px;color:#6b7280;font-weight:700">PROMEDIO</div></div>
+    </div>
+    ${live.length?`
+      <div class="lbl" style="margin-bottom:8px">🟢 EN CURSO AHORA (${live.length})</div>
+      ${live.map(r=>`<div class="ac live">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:700;font-size:15px">${r.apt}</div>
+            <div style="font-size:13px;color:#6b7280;margin-top:2px">👤 ${r.worker}</div>
+            <div style="font-size:12px;color:#9ca3af;margin-top:2px">Inicio: ${fmtHour(toDate(r.startTime))}</div>
+          </div>
+          <div style="background:#dcfce7;color:var(--g);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700">● ACTIVO</div>
+        </div>
+        ${r.novedades?.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #bbf7d0">${novHTML(r.novedades)}</div>`:''}
+      </div>`).join('')}
+    `:''}
+    <div class="lbl" style="margin-bottom:8px;margin-top:4px">📋 HISTORIAL (${done.length})</div>
+    ${!done.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros aún</p>':
+      done.map(r=>{
+        const s=toDate(r.startTime),e=toDate(r.endTime);
+        return `<div class="ac">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-weight:700;font-size:15px">${r.apt}</div>
+              <div style="font-size:13px;color:#6b7280;margin
