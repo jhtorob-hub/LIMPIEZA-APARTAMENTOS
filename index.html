@@ -6,37 +6,50 @@
 <title>Control de Limpieza</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, sans-serif; background: #f9fafb; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f9fafb;-webkit-tap-highlight-color:transparent}
+#app{max-width:480px;margin:0 auto;padding:16px;min-height:100vh;padding-bottom:48px}
+.card{background:white;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 16px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;color:white;font-family:inherit}
+select,input,textarea{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #e5e7eb;font-size:15px;background:white;font-family:inherit;margin-bottom:8px;outline:none}
+textarea{resize:none}
+.lbl{font-size:12px;color:#6b7280;font-weight:700;letter-spacing:.05em;margin-bottom:6px}
+.nov{background:#dcfce7;border-radius:9px;padding:9px 12px;margin-bottom:6px;border-left:3px solid #16a34a}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.mthumb{border-radius:9px;overflow:hidden;aspect-ratio:1;background:#f3f4f6}
+.mthumb img,.mthumb video{width:100%;height:100%;object-fit:cover}
+.bdg{font-size:12px;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:6px}
+.hrow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f3f4f6}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:100}
+.mbox{background:white;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;margin:0 auto;max-height:90vh;overflow-y:auto}
+.ac{border-left:4px solid #e5e7eb;border-radius:12px;background:white;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.sbox{background:white;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.tab{flex:1;padding:9px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer}
+.irow{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;background:#f9fafb;border-radius:9px;margin-bottom:6px}
+.bar-wrap{background:#f3f4f6;border-radius:8px;height:24px;margin-bottom:6px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:8px;display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:700;color:white;min-width:32px}
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const { useState, useEffect, useRef } = React;
-const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } = Recharts;
-
+<div id="root" style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:52px">🧹</div>
+<script>
 firebase.initializeApp({
-  apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
-  authDomain: "lavanderia-limpieza.firebaseapp.com",
-  projectId: "lavanderia-limpieza",
-  storageBucket: "lavanderia-limpieza.firebasestorage.app",
-  messagingSenderId: "229695150868",
-  appId: "1:229695150868:web:082157b403bcef987b8001"
+  apiKey:"AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
+  authDomain:"lavanderia-limpieza.firebaseapp.com",
+  projectId:"lavanderia-limpieza",
+  storageBucket:"lavanderia-limpieza.firebasestorage.app",
+  messagingSenderId:"229695150868",
+  appId:"1:229695150868:web:082157b403bcef987b8001"
 });
-const db = firebase.firestore();
+var db=firebase.firestore();
 
-const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const COLORS = ["#16a34a","#2563eb","#d97706","#dc2626","#7c3aed","#0891b2","#be185d"];
-const G="#16a34a", R="#dc2626", B="#2563eb", O="#d97706", PU="#7c3aed";
-const PASS = "admin2024";
+var PASS="admin2024";
+var MONTHS=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+var COLORS=["#16a34a","#2563eb","#d97706","#dc2626","#7c3aed","#0891b2","#be185d","#b45309"];
+var G="#16a34a",R="#dc2626",B="#2563eb",O="#d97706",PU="#7c3aed";
 
-const DEF_APTS = [
+var DEF_APTS=[
   {name:"201 LAURELES",client:"TCG",valor:0},{name:"302 LAURELES",client:"TCG",valor:0},
   {name:"303 LAURELES",client:"TCG",valor:0},{name:"303 MONSERRATE",client:"TCG",valor:0},
   {name:"306",client:"ROMULO",valor:0},{name:"308 BASELOFT",client:"DIEGO CAMACHO",valor:0},
@@ -49,527 +62,462 @@ const DEF_APTS = [
   {name:"1405",client:"TCG",valor:0},{name:"1703",client:"TCG",valor:0},
   {name:"1802",client:"TCG",valor:0},{name:"2105",client:"TCG",valor:0},
   {name:"2204",client:"LIGIA",valor:0},{name:"2404",client:"ALEJA",valor:0},
-  {name:"2505",client:"TCG",valor:0},{name:"2701",client:"TCG",valor:0},
+  {name:"2505",client:"TCG",valor:0},{name:"2701",client:"TCG",valor:0}
 ];
-const DEF_WORKERS = ["Maria Garcia","Juan Lopez","Ana Martinez","Pedro Rodriguez","Laura Gomez"];
+var DEF_WORKERS=["Maria Garcia","Juan Lopez","Ana Martinez","Pedro Rodriguez","Laura Gomez"];
 
-// Firestore
-async function fsGet(col, id) {
-  try { const r = await db.collection(col).doc(id).get(); return r.exists ? {id:r.id,...r.data()} : null; } catch(e) { return null; }
+var S={
+  screen:"home",worker:"",selApt:null,
+  aptList:DEF_APTS.slice(),workerList:DEF_WORKERS.slice(),
+  elapsed:0,novedades:[],entryMedia:[],danosMedia:[],exitMedia:[],
+  showModal:false,showNov:false,novDraft:"",
+  lastRec:null,adminRecs:[],allRecs:[],
+  adminPass:"",adminError:"",
+  fDate:"",fWorker:"",fApt:"",
+  sTab:"apts",aptForm:{name:"",client:"",valor:0},editIdx:-1,newWorker:"",
+  dashFrom:(function(){var d=new Date();d.setDate(1);return d.toISOString().slice(0,10)})(),
+  dashTo:new Date().toISOString().slice(0,10),
+  sessionId:null,sessionStart:null,timerInt:null,pollInt:null,adminUnsub:null
+};
+
+function fmt(s){return[Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(function(x){return String(x).padStart(2,"0")}).join(":")}
+function fmtDate(d){try{return new Date(d).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"})}catch(e){return""}}
+function fmtHour(d){try{return new Date(d).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"})}catch(e){return""}}
+function nowTime(){return new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
+function pesos(v){return "$"+Number(v||0).toLocaleString("es-CO")}
+function aptLabel(a){return a?a.name+" ("+a.client+")":""}
+function toDate(t){if(!t)return new Date();if(t.toDate)return t.toDate();return new Date(t)}
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+
+function render(){
+  var screens={home:sHome,settings:sSettings,active:sActive,summary:sSummary,adminLogin:sAdminLogin,admin:sAdmin,dashboard:sDashboard};
+  var fn=screens[S.screen]||sHome;
+  document.getElementById("root").innerHTML='<div id="app">'+fn()+'</div>';
 }
-async function fsSet(col, id, data) {
-  try { await db.collection(col).doc(id).set(data, {merge:true}); } catch(e) {}
-}
-async function fsAdd(col, data) {
-  try { const r = await db.collection(col).add(data); return {id:r.id}; } catch(e) { return null; }
-}
-async function fsList(col) {
-  try { const r = await db.collection(col).orderBy("startTime","desc").limit(500).get(); return r.docs.map(d=>({id:d.id,...d.data()})); } catch(e) { return []; }
-}
-async function fsPatch(col, id, data) {
-  try { await db.collection(col).doc(id).update(data); } catch(e) {}
-}
+function go(s){S.screen=s;render()}
 
-// Utils
-const fmt = s => [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(x=>String(x).padStart(2,"0")).join(":");
-const fmtDate = d => new Date(d).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"});
-const fmtHour = d => new Date(d).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"});
-const nowTime = () => new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-const pesos = v => "$"+Number(v||0).toLocaleString("es-CO");
-const aptLabel = a => a ? a.name+" ("+a.client+")" : "";
-const toDate = t => t && t.toDate ? t.toDate() : (t ? new Date(t) : new Date());
-
-// UI
-const Card = ({children,style={}}) => <div style={{background:"white",borderRadius:14,padding:16,marginBottom:12,boxShadow:"0 1px 4px rgba(0,0,0,.08)",...style}}>{children}</div>;
-const Btn = ({children,bg=G,onClick,style={}}) => <button onClick={onClick} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"12px 16px",border:"none",borderRadius:10,fontSize:15,fontWeight:700,cursor:"pointer",marginTop:8,color:"white",background:bg,...style}}>{children}</button>;
-const Lbl = ({t}) => <div style={{fontSize:12,color:"#6b7280",fontWeight:700,letterSpacing:".05em",marginBottom:6}}>{t}</div>;
-const Inp = ({style={},...p}) => <input style={{width:"100%",padding:"11px 12px",borderRadius:9,border:"1px solid #e5e7eb",fontSize:15,background:"white",marginBottom:8,...style}} {...p}/>;
-const Sel = ({val,onChange,style={},children}) => <select value={val} onChange={e=>onChange(e.target.value)} style={{width:"100%",padding:"11px 12px",borderRadius:9,border:"1px solid #e5e7eb",fontSize:15,background:"white",marginBottom:8,...style}}>{children}</select>;
-const StatBox = ({val,lbl,color,sub}) => <div style={{background:"white",borderRadius:12,padding:12,textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,.07)"}}><div style={{fontWeight:900,color,fontSize:18,lineHeight:1.2}}>{val}</div><div style={{fontSize:11,color:"#6b7280",fontWeight:700,marginTop:2}}>{lbl}</div>{sub&&<div style={{fontSize:10,color:"#9ca3af",marginTop:2,fontWeight:600}}>{sub}</div>}</div>;
-
-function NovList({list=[]}) {
-  return <div>{list.map((n,i)=><div key={i} style={{background:"#dcfce7",borderRadius:9,padding:"9px 12px",marginBottom:6,borderLeft:"3px solid "+G}}><div style={{fontSize:12,color:G,fontWeight:600,marginBottom:2}}>{n.time}</div><div style={{fontSize:14}}>{n.text}</div></div>)}</div>;
-}
-function MediaGrid({items=[]}) {
-  if (!items.length) return null;
-  return <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginTop:10}}>{items.map((it,i)=><div key={i} style={{borderRadius:9,overflow:"hidden",aspectRatio:"1",background:"#f3f4f6"}}>{it.isVideo?<video src={it.url} style={{width:"100%",height:"100%",objectFit:"cover"}} controls/>:<img src={it.url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}</div>)}</div>;
-}
-function MediaBtns({onV,onP,vc=B,pc=B}) {
-  return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-    <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px 8px",background:vc,color:"white",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer"}}>🎥 Video<input type="file" accept="video/*" capture="environment" multiple style={{display:"none"}} onChange={onV}/></label>
-    <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"11px 8px",background:"white",color:pc,border:"2px solid "+pc,borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer"}}>📸 Foto<input type="file" accept="image/*" capture="environment" multiple style={{display:"none"}} onChange={onP}/></label>
-  </div>;
-}
-
-function App() {
-  const [screen,setScreen] = useState("loading");
-  const [worker,setWorker] = useState("");
-  const [selApt,setSelApt] = useState(null);
-  const [aptList,setAptList] = useState(DEF_APTS);
-  const [workerList,setWorkerList] = useState(DEF_WORKERS);
-  const [elapsed,setElapsed] = useState(0);
-  const [novedades,setNovedades] = useState([]);
-  const [entryMedia,setEntryMedia] = useState([]);
-  const [danosMedia,setDanosMedia] = useState([]);
-  const [exitMedia,setExitMedia] = useState([]);
-  const [showModal,setShowModal] = useState(false);
-  const [showNov,setShowNov] = useState(false);
-  const [novDraft,setNovDraft] = useState("");
-  const [lastRec,setLastRec] = useState(null);
-  const [adminRecs,setAdminRecs] = useState([]);
-  const [allRecs,setAllRecs] = useState([]);
-  const [adminPass,setAdminPass] = useState("");
-  const [adminError,setAdminError] = useState("");
-  const [fDate,setFDate] = useState("");
-  const [fWorker,setFWorker] = useState("");
-  const [fApt,setFApt] = useState("");
-  const [sTab,setSTab] = useState("apts");
-  const [aptForm,setAptForm] = useState({name:"",client:"",valor:0});
-  const [editIdx,setEditIdx] = useState(-1);
-  const [newWorker,setNewWorker] = useState("");
-  const [dashLoading,setDashLoading] = useState(false);
-  const [dashFrom,setDashFrom] = useState(()=>{const d=new Date();d.setDate(1);return d.toISOString().slice(0,10);});
-  const [dashTo,setDashTo] = useState(new Date().toISOString().slice(0,10));
-  const sessRef = useRef(null);
-  const timerRef = useRef(null);
-  const pollRef = useRef(null);
-
-  useEffect(()=>{loadConfig();return()=>{clearInterval(timerRef.current);clearInterval(pollRef.current);};},[]);
-
-  async function loadConfig() {
-    const a = await fsGet("config","apartamentos");
-    if (a?.list?.length) { if (typeof a.list[0]==="string") setAptList(DEF_APTS); else setAptList(a.list); }
-    const w = await fsGet("config","trabajadores");
-    if (w?.list?.length) setWorkerList(w.list);
-    setScreen("home");
-  }
-  async function saveApts(list) { setAptList(list); await fsSet("config","apartamentos",{list}); }
-  async function saveWorkers(list) { setWorkerList(list); await fsSet("config","trabajadores",{list}); }
-
-  function readFiles(files,setter) {
-    Array.from(files).forEach(f=>{const rd=new FileReader();rd.onload=e=>setter(p=>[...p,{url:e.target.result,isVideo:f.type.startsWith("video")}]);rd.readAsDataURL(f);});
-  }
-
-  async function startCleaning() {
-    if (!worker||!selApt) return;
-    const startTime = new Date();
-    setElapsed(0);setNovedades([]);setEntryMedia([]);setDanosMedia([]);setExitMedia([]);
-    setShowModal(false);setShowNov(false);setNovDraft("");
-    setScreen("active");
-    const doc = await fsAdd("limpiezas",{worker,apt:aptLabel(selApt),client:selApt.client,valor:selApt.valor||0,startTime:firebase.firestore.Timestamp.fromDate(startTime),status:"active",novedades:[],entryCount:0,danosCount:0,exitCount:0,duration:0});
-    sessRef.current = {id:doc?.id,worker,apt:selApt,startTime};
-    clearInterval(timerRef.current);
-    timerRef.current = setInterval(()=>setElapsed(e=>e+1),1000);
-  }
-
-  function addNov() {
-    if (!novDraft.trim()) return;
-    const n = {text:novDraft.trim(),time:nowTime()};
-    const u = [...novedades,n];
-    setNovedades(u);setNovDraft("");setShowNov(false);
-    if (sessRef.current?.id) fsPatch("limpiezas",sessRef.current.id,{novedades:u});
-  }
-
-  async function finalizarLimpieza() {
-    clearInterval(timerRef.current);
-    const endTime = new Date();
-    const aptObj = sessRef.current?.apt||selApt;
-    if (sessRef.current?.id) {
-      await fsPatch("limpiezas",sessRef.current.id,{status:"completed",endTime:firebase.firestore.Timestamp.fromDate(endTime),duration:elapsed,novedades,entryCount:entryMedia.length,danosCount:danosMedia.length,exitCount:exitMedia.length});
+// Firebase
+function loadConfig(){
+  db.collection("config").doc("apartamentos").get().then(function(d){
+    if(d.exists&&d.data().list&&d.data().list.length){
+      var l=d.data().list;
+      S.aptList=(typeof l[0]==="string")?DEF_APTS.slice():l;
     }
-    setLastRec({worker:sessRef.current?.worker||worker,apt:aptLabel(aptObj),client:aptObj?.client,valor:aptObj?.valor||0,startTime:sessRef.current?.startTime,endTime,duration:elapsed,novedades,entryCount:entryMedia.length,danosCount:danosMedia.length,exitCount:exitMedia.length});
-    setShowModal(false);setScreen("summary");
-  }
-
-  function goHome() {
-    clearInterval(timerRef.current);sessRef.current=null;
-    setScreen("home");setWorker("");setSelApt(null);setElapsed(0);
-    setNovedades([]);setEntryMedia([]);setDanosMedia([]);setExitMedia([]);
-  }
-
-  async function enterAdmin() {
-    if (adminPass!==PASS){setAdminError("Contrasena incorrecta");return;}
-    setAdminError("");setScreen("admin");
-    await fetchRecs();
-    clearInterval(pollRef.current);
-    pollRef.current=setInterval(fetchRecs,10000);
-  }
-
-  async function fetchRecs() {
-    const docs = await fsList("limpiezas");
-    setAdminRecs(docs);setAllRecs(docs);
-  }
-
-  async function fetchAllForDash() {
-    setDashLoading(true);
-    const docs = await fsList("limpiezas");
-    setAllRecs(docs);setDashLoading(false);
-  }
-
-  function leaveAdmin(){clearInterval(pollRef.current);setScreen("home");}
-
-  async function saveAptForm() {
-    if (!aptForm.name.trim()) return;
-    const a={name:aptForm.name.trim().toUpperCase(),client:aptForm.client.trim().toUpperCase(),valor:Number(aptForm.valor)||0};
-    if (editIdx===-2) await saveApts([...aptList,a]);
-    else await saveApts(aptList.map((x,i)=>i===editIdx?a:x));
-    setEditIdx(-1);
-  }
-
-  function getDashData() {
-    const from=dashFrom?new Date(dashFrom+" 00:00:00"):null;
-    const to=dashTo?new Date(dashTo+" 23:59:59"):null;
-    const completed=allRecs.filter(r=>{
-      if(r.status!=="completed")return false;
-      const d=toDate(r.endTime||r.startTime);
-      if(from&&d<from)return false;
-      if(to&&d>to)return false;
-      return true;
-    });
-    const byClient={};
-    completed.forEach(r=>{
-      const c=r.client||"Sin cliente";
-      if(!byClient[c])byClient[c]={client:c,count:0,valor:0,dur:0};
-      byClient[c].count++;byClient[c].valor+=r.valor||0;byClient[c].dur+=r.duration||0;
-    });
-    const clients=Object.values(byClient).sort((a,b)=>b.count-a.count);
-    const now=new Date();
-    const months=Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-(5-i),1);return{label:MONTHS[d.getMonth()]+" "+String(d.getFullYear()).slice(2),year:d.getFullYear(),month:d.getMonth(),count:0,valor:0};});
-    allRecs.filter(r=>r.status==="completed").forEach(r=>{
-      const d=toDate(r.endTime||r.startTime);
-      const m=months.find(x=>x.year===d.getFullYear()&&x.month===d.getMonth());
-      if(m){m.count++;m.valor+=r.valor||0;}
-    });
-    const totalValor=completed.reduce((a,r)=>a+(r.valor||0),0);
-    const totalCount=completed.length;
-    const avgDur=totalCount?Math.round(completed.reduce((a,r)=>a+(r.duration||0),0)/totalCount):0;
-    const cm=now.getMonth(),cy=now.getFullYear(),pm=cm===0?11:cm-1,py=cm===0?cy-1:cy;
-    const curD=allRecs.filter(r=>{if(r.status!=="completed")return false;const d=toDate(r.endTime||r.startTime);return d.getMonth()===cm&&d.getFullYear()===cy;});
-    const prevD=allRecs.filter(r=>{if(r.status!=="completed")return false;const d=toDate(r.endTime||r.startTime);return d.getMonth()===pm&&d.getFullYear()===py;});
-    return{completed,clients,months,totalValor,totalCount,avgDur,curD,prevD};
-  }
-
-  const wrap={maxWidth:480,margin:"0 auto",padding:16,minHeight:"100vh",paddingBottom:48,fontFamily:"system-ui,sans-serif",background:"#f9fafb"};
-
-  if (screen==="loading") return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontSize:52}}>🧹</div>;
-
-  if (screen==="home") return (
-    <div style={wrap}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"20px 0 12px"}}>
-        <div><div style={{fontSize:36}}>🧹</div><h1 style={{fontSize:22,fontWeight:800,color:"#111827",margin:"6px 0 2px"}}>Control de Limpieza</h1><p style={{color:"#6b7280",fontSize:13}}>Gestion de apartamentos</p></div>
-        <button onClick={()=>setScreen("settings")} style={{background:"white",border:"1px solid #e5e7eb",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:700,marginTop:8}}>⚙️ Gestion</button>
-      </div>
-      <Card>
-        <Lbl t="TRABAJADOR"/>
-        <Sel val={worker} onChange={setWorker}><option value="">Seleccionar trabajador...</option>{workerList.map(w=><option key={w}>{w}</option>)}</Sel>
-        <Lbl t="APARTAMENTO"/>
-        <Sel val={selApt?aptLabel(selApt):""} onChange={v=>{const a=aptList.find(x=>aptLabel(x)===v);setSelApt(a||null);}}>
-          <option value="">Seleccionar apartamento...</option>
-          {[...aptList].sort((a,b)=>a.name.localeCompare(b.name)).map(a=><option key={a.name} value={aptLabel(a)}>{aptLabel(a)}{a.valor>0?" · "+pesos(a.valor):""}</option>)}
-        </Sel>
-        {selApt&&<div style={{background:"#f0fdf4",borderRadius:9,padding:"10px 12px",marginBottom:8,display:"flex",justifyContent:"space-between"}}>
-          <span style={{color:G,fontWeight:700,fontSize:13}}>Cliente: {selApt.client||"Sin asignar"}</span>
-          {selApt.valor>0&&<span style={{color:PU,fontWeight:700,fontSize:13}}>{pesos(selApt.valor)}</span>}
-        </div>}
-        <Btn bg={worker&&selApt?G:"#9ca3af"} onClick={startCleaning} style={{fontSize:16,padding:14,marginTop:4}}>▶ Iniciar Limpieza</Btn>
-      </Card>
-      <Btn bg={B} onClick={()=>setScreen("adminLogin")} style={{marginTop:0}}>👨‍💼 Panel de Administrador</Btn>
-    </div>
-  );
-
-  if (screen==="settings") {
-    const isApts=sTab==="apts";
-    return (
-      <div style={wrap}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-          <button onClick={()=>setScreen("home")} style={{background:"white",border:"1px solid #e5e7eb",borderRadius:9,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:14}}>← Volver</button>
-          <div><h2 style={{fontSize:19,color:"#111827"}}>⚙️ Gestion</h2><p style={{fontSize:12,color:"#6b7280"}}>Apartamentos y trabajadores</p></div>
-        </div>
-        <div style={{display:"flex",gap:4,marginBottom:16,background:"white",borderRadius:12,padding:4,boxShadow:"0 1px 3px rgba(0,0,0,.08)"}}>
-          <button onClick={()=>setSTab("apts")} style={{flex:1,padding:9,border:"none",borderRadius:9,fontSize:13,fontWeight:700,cursor:"pointer",background:isApts?G:"transparent",color:isApts?"white":"#6b7280"}}>🏠 Apts ({aptList.length})</button>
-          <button onClick={()=>setSTab("workers")} style={{flex:1,padding:9,border:"none",borderRadius:9,fontSize:13,fontWeight:700,cursor:"pointer",background:!isApts?G:"transparent",color:!isApts?"white":"#6b7280"}}>👤 Trabajadores ({workerList.length})</button>
-        </div>
-        {isApts ? <>
-          {editIdx===-2||editIdx>=0 ? <Card>
-            <div style={{fontWeight:700,marginBottom:12,fontSize:15}}>{editIdx===-2?"Agregar":"Editar"} Apartamento</div>
-            <Lbl t="NOMBRE"/><Inp value={aptForm.name} onChange={e=>setAptForm(f=>({...f,name:e.target.value}))} placeholder="Ej: 201 LAURELES"/>
-            <Lbl t="CLIENTE"/><Inp value={aptForm.client} onChange={e=>setAptForm(f=>({...f,client:e.target.value}))} placeholder="Ej: TCG"/>
-            <Lbl t="VALOR DE LA LIMPIEZA ($)"/><Inp type="number" value={aptForm.valor} onChange={e=>setAptForm(f=>({...f,valor:Number(e.target.value)}))} placeholder="0" min="0"/>
-            <Btn bg={G} onClick={saveAptForm} style={{marginTop:4}}>Guardar</Btn>
-            <Btn bg="#9ca3af" onClick={()=>setEditIdx(-1)}>Cancelar</Btn>
-          </Card> : <Btn bg={G} onClick={()=>{setAptForm({name:"",client:"",valor:0});setEditIdx(-2);}} style={{marginTop:0,marginBottom:4}}>+ Agregar Apartamento</Btn>}
-          <Card>
-            <Lbl t="LISTA"/>
-            {aptList.map((a,idx)=><div key={a.name+idx} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:10,background:"#f9fafb",borderRadius:9,marginBottom:6}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:14}}>{a.name}</div>
-                <div style={{marginTop:4,display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {a.client&&<span style={{background:"#eff6ff",color:B,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:700}}>{a.client}</span>}
-                  {a.valor>0&&<span style={{color:PU,fontWeight:700,fontSize:12}}>{pesos(a.valor)}</span>}
-                </div>
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{setAptForm({...a});setEditIdx(idx);}} style={{background:"#eff6ff",color:B,border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontWeight:600,fontSize:13}}>✏️</button>
-                <button onClick={()=>{if(confirm("Eliminar: "+a.name+"?"))saveApts(aptList.filter((_,j)=>j!==idx));}} style={{background:"#fff1f2",color:R,border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:13}}>🗑️</button>
-              </div>
-            </div>)}
-          </Card>
-        </> : <>
-          <Card>
-            <Lbl t="AGREGAR TRABAJADOR"/>
-            <div style={{display:"flex",gap:8}}>
-              <Inp value={newWorker} onChange={e=>setNewWorker(e.target.value)} placeholder="Ej: Carlos Perez" style={{flex:1,margin:0}} onKeyDown={e=>{if(e.key==="Enter"&&newWorker.trim()){saveWorkers([...workerList,newWorker.trim()]);setNewWorker("");}}}/>
-              <button onClick={()=>{if(newWorker.trim()){saveWorkers([...workerList,newWorker.trim()]);setNewWorker("");}}} style={{background:G,color:"white",border:"none",borderRadius:9,padding:"10px 18px",fontWeight:700,cursor:"pointer",fontSize:18}}>+</button>
-            </div>
-          </Card>
-          <Card><Lbl t="TRABAJADORES"/>
-            {workerList.map((w,i)=><div key={w} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 10px",background:"#f9fafb",borderRadius:9,marginBottom:6}}>
-              <span style={{fontSize:14,fontWeight:500}}>{w}</span>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{const v=prompt("Editar:",w);if(v?.trim())saveWorkers(workerList.map((x,j)=>j===i?v.trim():x));}} style={{background:"#eff6ff",color:B,border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontWeight:600,fontSize:13}}>✏️</button>
-                <button onClick={()=>{if(confirm("Eliminar: "+w+"?"))saveWorkers(workerList.filter((_,j)=>j!==i));}} style={{background:"#fff1f2",color:R,border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:13}}>🗑️</button>
-              </div>
-            </div>)}
-          </Card>
-        </>}
-      </div>
-    );
-  }
-
-  if (screen==="active") return (
-    <div style={wrap}>
-      <div style={{background:"linear-gradient(135deg,#16a34a,#15803d)",borderRadius:16,padding:20,color:"white",marginBottom:12,textAlign:"center"}}>
-        <div style={{fontSize:11,fontWeight:700,opacity:.85,marginBottom:4}}>🧹 LIMPIEZA EN CURSO</div>
-        <div style={{fontSize:18,fontWeight:800}}>{aptLabel(sessRef.current?.apt||selApt)}</div>
-        <div style={{fontSize:13,opacity:.8,marginBottom:10}}>{sessRef.current?.apt?.client}</div>
-        <div style={{fontSize:14,opacity:.85,marginBottom:10}}>👤 {sessRef.current?.worker||worker}</div>
-        <div style={{fontSize:50,fontWeight:900,fontVariantNumeric:"tabular-nums",letterSpacing:2,lineHeight:1}}>{fmt(elapsed)}</div>
-        <div style={{fontSize:12,opacity:.75,marginTop:6}}>{sessRef.current?.startTime?"Inicio: "+fmtHour(sessRef.current.startTime):""}</div>
-      </div>
-      <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,fontSize:15}}>🚪 Evidencia Entrada</span><span style={{fontSize:12,fontWeight:800,padding:"2px 9px",borderRadius:20,background:"#eff6ff",color:B}}>{entryMedia.length}</span></div>
-        <MediaBtns onV={e=>readFiles(e.target.files,setEntryMedia)} onP={e=>readFiles(e.target.files,setEntryMedia)} vc={B} pc={B}/>
-        <MediaGrid items={entryMedia}/>
-      </Card>
-      <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><span style={{fontWeight:700,fontSize:15}}>📝 Novedades</span><span style={{fontSize:12,fontWeight:800,padding:"2px 9px",borderRadius:20,background:"#fef3c7",color:O}}>{novedades.length}</span></div>
-        <NovList list={novedades}/>
-        {showNov?<>
-          <textarea value={novDraft} onChange={e=>setNovDraft(e.target.value)} placeholder="Escribir novedad..." style={{width:"100%",padding:10,borderRadius:9,border:"1px solid #e5e7eb",fontSize:14,resize:"none",height:80,fontFamily:"inherit",marginTop:6,boxSizing:"border-box"}}/>
-          <Btn bg={G} onClick={addNov} style={{marginTop:6}}>✅ Guardar</Btn>
-          <Btn bg="#9ca3af" onClick={()=>{setShowNov(false);setNovDraft("");}} style={{marginTop:6}}>Cancelar</Btn>
-        </>:<Btn bg={O} onClick={()=>setShowNov(true)} style={{marginTop:0}}>➕ Agregar Novedad</Btn>}
-      </Card>
-      <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,fontSize:15}}>⚠️ Evidencia de Danos</span><span style={{fontSize:12,fontWeight:800,padding:"2px 9px",borderRadius:20,background:"#fff1f2",color:R}}>{danosMedia.length}</span></div>
-        <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:"12px 16px",background:R,color:"white",borderRadius:10,fontSize:15,fontWeight:700,cursor:"pointer"}}>📸 Fotografiar Dano<input type="file" accept="image/*" capture="environment" multiple style={{display:"none"}} onChange={e=>readFiles(e.target.files,setDanosMedia)}/></label>
-        <MediaGrid items={danosMedia}/>
-      </Card>
-      <Btn bg={R} onClick={()=>setShowModal(true)} style={{padding:15,fontSize:16,marginTop:4}}>⏹ Finalizar Limpieza</Btn>
-      {showModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end",zIndex:100}}>
-        <div style={{background:"white",borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}}>
-          <div style={{textAlign:"center",marginBottom:16}}><div style={{fontSize:40}}>🚪</div><h3 style={{margin:"8px 0 4px"}}>Evidencia de Salida</h3><p style={{color:"#6b7280",fontSize:14}}>Graba o toma fotos del estado final</p></div>
-          <MediaBtns onV={e=>readFiles(e.target.files,setExitMedia)} onP={e=>readFiles(e.target.files,setExitMedia)} vc={G} pc={G}/>
-          <MediaGrid items={exitMedia}/>
-          <Btn bg={R} onClick={finalizarLimpieza} style={{padding:14,marginTop:14}}>✅ Confirmar Finalizacion</Btn>
-          <Btn bg="#9ca3af" onClick={()=>setShowModal(false)} style={{marginTop:8}}>Cancelar</Btn>
-        </div>
-      </div>}
-    </div>
-  );
-
-  if (screen==="summary"&&lastRec) return (
-    <div style={wrap}>
-      <div style={{textAlign:"center",padding:"24px 0 16px"}}><div style={{fontSize:56}}>✅</div><h2 style={{margin:"10px 0 4px",color:G,fontSize:22}}>Limpieza Completada</h2><p style={{color:"#6b7280",fontSize:14}}>{fmtDate(lastRec.endTime)}</p></div>
-      <Card>
-        {[["Trabajador",lastRec.worker],["Apartamento",lastRec.apt],["Cliente",lastRec.client],["Valor",pesos(lastRec.valor)],["Duracion",fmt(lastRec.duration)],["Inicio",fmtHour(lastRec.startTime)],["Fin",fmtHour(lastRec.endTime)]].map(([l,v],i,a)=>(
-          <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<a.length-1?"1px solid #f3f4f6":"none"}}><span style={{fontSize:14,color:"#6b7280"}}>{l}</span><span style={{fontWeight:700}}>{v}</span></div>
-        ))}
-      </Card>
-      {lastRec.novedades?.length>0&&<Card><div style={{fontWeight:700,marginBottom:10}}>📝 Novedades</div><NovList list={lastRec.novedades}/></Card>}
-      {entryMedia.length>0&&<Card><div style={{fontWeight:700,marginBottom:8}}>🚪 Entrada</div><MediaGrid items={entryMedia}/></Card>}
-      {danosMedia.length>0&&<Card><div style={{fontWeight:700,marginBottom:8}}>⚠️ Danos</div><MediaGrid items={danosMedia}/></Card>}
-      {exitMedia.length>0&&<Card><div style={{fontWeight:700,marginBottom:8}}>🚪 Salida</div><MediaGrid items={exitMedia}/></Card>}
-      <Btn bg={G} onClick={goHome} style={{padding:14,fontSize:16,marginTop:0}}>🏠 Nueva Limpieza</Btn>
-      <Btn bg={B} onClick={()=>setScreen("adminLogin")} style={{marginTop:10}}>👨‍💼 Panel Admin</Btn>
-    </div>
-  );
-
-  if (screen==="adminLogin") return (
-    <div style={wrap}>
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"70vh"}}>
-        <div style={{fontSize:52,marginBottom:16}}>🔐</div>
-        <h2 style={{fontSize:22,fontWeight:800,color:"#111827",marginBottom:6}}>Panel de Administrador</h2>
-        <p style={{color:"#6b7280",fontSize:14,marginBottom:24}}>Ingresa la contrasena</p>
-        <Card style={{width:"100%"}}>
-          <Lbl t="CONTRASENA"/>
-          <Inp type="password" value={adminPass} onChange={e=>setAdminPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&enterAdmin()} placeholder="..." style={{fontSize:18,letterSpacing:4}}/>
-          {adminError&&<div style={{color:R,fontSize:13,marginBottom:8,fontWeight:600}}>{adminError}</div>}
-          <Btn bg={B} onClick={enterAdmin} style={{marginTop:4}}>Entrar al Panel</Btn>
-        </Card>
-        <button onClick={()=>setScreen("home")} style={{background:"none",border:"none",color:"#6b7280",marginTop:16,cursor:"pointer",fontSize:14}}>← Volver</button>
-      </div>
-    </div>
-  );
-
-  if (screen==="admin") {
-    const live=adminRecs.filter(r=>r.status==="active");
-    const done=adminRecs.filter(r=>r.status==="completed");
-    const todayStr=new Date().toDateString();
-    const todayDone=done.filter(r=>toDate(r.endTime).toDateString()===todayStr);
-    const avgDurToday=todayDone.length?Math.round(todayDone.reduce((a,r)=>a+(r.duration||0),0)/todayDone.length):0;
-    const totalHoy=todayDone.reduce((a,r)=>a+(r.valor||0),0);
-    const filtered=done.filter(r=>{
-      if(fDate&&toDate(r.endTime).toISOString().slice(0,10)!==fDate)return false;
-      if(fWorker&&r.worker!==fWorker)return false;
-      if(fApt&&r.apt!==fApt)return false;
-      return true;
-    });
-    const workers=[...new Set(done.map(r=>r.worker))].sort();
-    const apts=[...new Set(done.map(r=>r.apt))].sort();
-    return (
-      <div style={wrap}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-          <button onClick={leaveAdmin} style={{background:"white",border:"1px solid #e5e7eb",borderRadius:9,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:14}}>← Volver</button>
-          <div style={{flex:1}}><h2 style={{fontSize:19,color:"#111827"}}>👨‍💼 Panel Admin</h2><p style={{fontSize:12,color:"#6b7280"}}>Tiempo real</p></div>
-          <button onClick={()=>{setScreen("dashboard");fetchAllForDash();}} style={{background:PU,color:"white",border:"none",borderRadius:9,padding:"8px 12px",cursor:"pointer",fontWeight:700,fontSize:13}}>📊 Dashboard</button>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          <StatBox val={live.length} lbl="EN CURSO" color={G}/>
-          <StatBox val={todayDone.length} lbl="HOY" color={B}/>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-          <StatBox val={fmt(avgDurToday)} lbl="PROMEDIO HOY" color={O}/>
-          <StatBox val={pesos(totalHoy)} lbl="INGRESOS HOY" color={PU}/>
-        </div>
-        <Card>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <span style={{fontWeight:700,fontSize:14}}>🔍 Filtros</span>
-            {(fDate||fWorker||fApt)&&<button onClick={()=>{setFDate("");setFWorker("");setFApt("");}} style={{background:"#fff1f2",color:R,border:"none",borderRadius:7,padding:"4px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Limpiar</button>}
-          </div>
-          <Inp type="date" value={fDate} onChange={e=>setFDate(e.target.value)}/>
-          <Sel val={fWorker} onChange={setFWorker}><option value="">Todos los trabajadores</option>{workers.map(w=><option key={w}>{w}</option>)}</Sel>
-          <Sel val={fApt} onChange={setFApt} style={{marginBottom:0}}><option value="">Todos los apartamentos</option>{apts.map(a=><option key={a}>{a}</option>)}</Sel>
-        </Card>
-        {live.length>0&&<><div style={{fontSize:12,color:"#6b7280",fontWeight:700,marginBottom:8}}>🟢 EN CURSO ({live.length})</div>
-          {live.map(r=><div key={r.id} style={{borderLeft:"4px solid "+G,borderRadius:12,background:"#f0fdf4",padding:14,marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between"}}>
-              <div><div style={{fontWeight:700,fontSize:15}}>{r.apt}</div>{r.client&&<span style={{background:"#dcfce7",color:G,fontSize:11,fontWeight:700,padding:"1px 8px",borderRadius:20}}>{r.client}</span>}<div style={{fontSize:13,color:"#6b7280",marginTop:4}}>{r.worker}</div></div>
-              <div style={{background:"#dcfce7",color:G,padding:"4px 10px",borderRadius:20,fontSize:12,fontWeight:700,height:"fit-content"}}>● ACTIVO</div>
-            </div>
-            {r.novedades?.length>0&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #bbf7d0"}}><NovList list={r.novedades}/></div>}
-          </div>)}
-        </>}
-        <div style={{fontSize:12,color:"#6b7280",fontWeight:700,marginBottom:8,marginTop:4}}>📋 HISTORIAL ({filtered.length} de {done.length})</div>
-        {!filtered.length?<p style={{textAlign:"center",color:"#9ca3af",padding:24}}>Sin registros</p>:
-          filtered.map(r=><div key={r.id} style={{borderLeft:"4px solid #e5e7eb",borderRadius:12,background:"white",padding:14,marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,.07)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:15}}>{r.apt}</div>
-                {r.client&&<span style={{background:"#eff6ff",color:B,fontSize:11,fontWeight:700,padding:"1px 8px",borderRadius:20}}>{r.client}</span>}
-                <div style={{fontSize:13,color:"#6b7280",marginTop:4}}>{r.worker}</div>
-                <div style={{fontSize:12,color:"#9ca3af"}}>{r.endTime?fmtDate(toDate(r.endTime))+" · "+fmtHour(toDate(r.startTime))+"-"+fmtHour(toDate(r.endTime)):""}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontWeight:900,color:G,fontSize:18}}>{fmt(r.duration||0)}</div>
-                {r.valor>0&&<div style={{fontWeight:800,color:PU,fontSize:14}}>{pesos(r.valor)}</div>}
-                <div style={{fontSize:11,color:"#9ca3af"}}>{(r.entryCount||0)+(r.danosCount||0)+(r.exitCount||0)} arch</div>
-              </div>
-            </div>
-            {r.novedades?.length>0&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #f3f4f6"}}><NovList list={r.novedades}/></div>}
-          </div>)
-        }
-      </div>
-    );
-  }
-
-  if (screen==="dashboard") {
-    const {completed,clients,months,totalValor,totalCount,avgDur,curD,prevD}=getDashData();
-    const curValor=curD.reduce((a,r)=>a+(r.valor||0),0);
-    const prevValor=prevD.reduce((a,r)=>a+(r.valor||0),0);
-    const diff=curD.length-prevD.length;
-    const diffPct=prevD.length>0?Math.round((Math.abs(diff)/prevD.length)*100):0;
-    return (
-      <div style={wrap}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-          <button onClick={()=>setScreen("admin")} style={{background:"white",border:"1px solid #e5e7eb",borderRadius:9,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:14}}>← Volver</button>
-          <div style={{flex:1}}><h2 style={{fontSize:19,color:"#111827"}}>📊 Dashboard</h2><p style={{fontSize:12,color:"#6b7280"}}>Analisis de limpiezas</p></div>
-          <button onClick={fetchAllForDash} style={{background:"white",border:"1px solid #e5e7eb",borderRadius:9,padding:"6px 12px",cursor:"pointer",fontSize:13,fontWeight:700}}>🔄</button>
-        </div>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:10,fontSize:14}}>📅 Rango de Fechas</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <div><Lbl t="DESDE"/><Inp type="date" value={dashFrom} onChange={e=>setDashFrom(e.target.value)} style={{margin:0}}/></div>
-            <div><Lbl t="HASTA"/><Inp type="date" value={dashTo} onChange={e=>setDashTo(e.target.value)} style={{margin:0}}/></div>
-          </div>
-          {dashLoading&&<div style={{textAlign:"center",color:"#6b7280",fontSize:13,marginTop:8}}>Cargando...</div>}
-        </Card>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          <StatBox val={totalCount} lbl="TOTAL LIMPIEZAS" color={G} sub="en el rango"/>
-          <StatBox val={pesos(totalValor)} lbl="TOTAL VALOR" color={PU} sub="en el rango"/>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-          <StatBox val={fmt(avgDur)} lbl="DURACION PROM" color={O}/>
-          <StatBox val={clients.length} lbl="CLIENTES" color={B}/>
-        </div>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12,fontSize:14}}>📈 Mes Actual vs Anterior</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div style={{textAlign:"center",padding:12,background:"#f0fdf4",borderRadius:10}}>
-              <div style={{fontSize:11,color:"#6b7280",fontWeight:700,marginBottom:4}}>MES ACTUAL</div>
-              <div style={{fontSize:36,fontWeight:900,color:G}}>{curD.length}</div>
-              <div style={{fontSize:13,color:G,fontWeight:700}}>{pesos(curValor)}</div>
-            </div>
-            <div style={{textAlign:"center",padding:12,background:"#f9fafb",borderRadius:10}}>
-              <div style={{fontSize:11,color:"#6b7280",fontWeight:700,marginBottom:4}}>MES ANTERIOR</div>
-              <div style={{fontSize:36,fontWeight:900,color:"#9ca3af"}}>{prevD.length}</div>
-              <div style={{fontSize:13,color:"#9ca3af",fontWeight:700}}>{pesos(prevValor)}</div>
-            </div>
-          </div>
-          {prevD.length>0&&<div style={{textAlign:"center",marginTop:10,padding:8,background:diff>=0?"#f0fdf4":"#fff1f2",borderRadius:8}}>
-            <span style={{fontWeight:700,color:diff>=0?G:R,fontSize:14}}>{diff>=0?"▲ Mas":"▼ Menos"} {Math.abs(diff)} limpiezas ({diffPct}%) vs mes anterior</span>
-          </div>}
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12,fontSize:14}}>📊 Limpiezas por Mes</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={months} margin={{top:0,right:0,bottom:0,left:-20}}>
-              <XAxis dataKey="label" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} allowDecimals={false}/><Tooltip/>
-              <Bar dataKey="count" fill={G} radius={[4,4,0,0]} name="Limpiezas"/>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12,fontSize:14}}>💰 Valor por Mes</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={months} margin={{top:0,right:0,bottom:0,left:0}}>
-              <XAxis dataKey="label" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} tickFormatter={v=>v>=1000?Math.round(v/1000)+"k":v}/><Tooltip formatter={v=>pesos(v)}/>
-              <Bar dataKey="valor" fill={PU} radius={[4,4,0,0]} name="Valor"/>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card>
-          <div style={{fontWeight:700,marginBottom:12,fontSize:14}}>👥 Por Cliente</div>
-          {!clients.length?<p style={{color:"#9ca3af",textAlign:"center",padding:12}}>Sin datos en el rango</p>:
-            clients.map((c,i)=><div key={c.client} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:12,background:"#f9fafb",borderRadius:10,marginBottom:8,borderLeft:"4px solid "+COLORS[i%COLORS.length]}}>
-              <div>
-                <div style={{fontWeight:800,fontSize:15}}>{c.client}</div>
-                <div style={{fontSize:12,color:"#6b7280",marginTop:3}}><span style={{fontWeight:700,color:G}}>{c.count}</span> limpiezas{c.count>0&&<span style={{marginLeft:8,color:"#9ca3af"}}>· prom {fmt(Math.round(c.dur/c.count))}</span>}</div>
-                <div style={{fontSize:11,color:"#9ca3af",marginTop:2}}>{totalCount>0?Math.round(c.count/totalCount*100):0}% del total</div>
-              </div>
-              <div style={{textAlign:"right"}}><div style={{fontWeight:900,color:PU,fontSize:16}}>{pesos(c.valor)}</div><div style={{fontSize:11,color:"#9ca3af",marginTop:2}}>valor total</div></div>
-            </div>)
-          }
-          {clients.length>0&&<div style={{marginTop:8,padding:"10px 12px",background:"#f0fdf4",borderRadius:10,display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,color:G}}>TOTAL</span><span style={{fontWeight:900,color:PU}}>{pesos(totalValor)}</span></div>}
-        </Card>
-      </div>
-    );
-  }
-
-  return null;
+    return db.collection("config").doc("trabajadores").get();
+  }).then(function(d){
+    if(d.exists&&d.data().list&&d.data().list.length)S.workerList=d.data().list;
+    S.screen="home";render();
+  }).catch(function(){S.screen="home";render()});
+}
+function saveApts(list){S.aptList=list;db.collection("config").doc("apartamentos").set({list:list})}
+function saveWorkers(list){S.workerList=list;db.collection("config").doc("trabajadores").set({list:list})}
+function addDoc(data){return db.collection("limpiezas").add(data).then(function(r){return r.id})}
+function patchDoc(id,data){if(!id)return;db.collection("limpiezas").doc(id).update(data).catch(function(){})}
+function fetchRecs(){
+  return db.collection("limpiezas").orderBy("startTime","desc").limit(500).get().then(function(snap){
+    var docs=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())});
+    S.adminRecs=docs;S.allRecs=docs;render();
+  }).catch(function(){})
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+// Media
+function readFiles(files,key){
+  Array.from(files).forEach(function(f){
+    var rd=new FileReader();
+    rd.onload=function(e){S[key].push({url:e.target.result,isVideo:f.type.startsWith("video")});render()};
+    rd.readAsDataURL(f);
+  });
+}
+function mediaGridH(items){
+  if(!items||!items.length)return"";
+  var h='<div class="mgrid">';
+  items.forEach(function(it){
+    h+='<div class="mthumb">'+(it.isVideo?'<video src="'+it.url+'" controls></video>':'<img src="'+it.url+'" loading="lazy">')+'</div>';
+  });
+  return h+'</div>';
+}
+function novH(list){
+  return (list||[]).map(function(n){
+    return'<div class="nov"><div style="font-size:12px;color:'+G+';font-weight:600;margin-bottom:2px">'+esc(n.time)+'</div><div style="font-size:14px">'+esc(n.text)+'</div></div>';
+  }).join("");
+}
+function mediaBtnsH(onV,onP,vc,pc){
+  return'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+    '<label style="display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 8px;background:'+vc+';color:white;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">Video<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="'+onV+'"></label>'+
+    '<label style="display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 8px;background:white;color:'+pc+';border:2px solid '+pc+';border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">Foto<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="'+onP+'"></label>'+
+    '</div>';
+}
+
+// Actions
+function startCleaning(){
+  if(!S.worker||!S.selApt)return;
+  S.sessionStart=new Date();S.elapsed=0;
+  S.novedades=[];S.entryMedia=[];S.danosMedia=[];S.exitMedia=[];
+  S.showModal=false;S.showNov=false;S.novDraft="";
+  go("active");
+  addDoc({worker:S.worker,apt:aptLabel(S.selApt),client:S.selApt.client,valor:S.selApt.valor||0,startTime:firebase.firestore.Timestamp.fromDate(S.sessionStart),status:"active",novedades:[],entryCount:0,danosCount:0,exitCount:0,duration:0}).then(function(id){S.sessionId=id});
+  clearInterval(S.timerInt);
+  S.timerInt=setInterval(function(){S.elapsed++;var t=document.getElementById("tmr");if(t)t.textContent=fmt(S.elapsed)},1000);
+}
+function addNov(){
+  var ta=document.getElementById("novta");
+  var text=ta&&ta.value.trim();
+  if(!text)return;
+  var n={text:text,time:nowTime()};
+  S.novedades.push(n);S.showNov=false;S.novDraft="";render();
+  patchDoc(S.sessionId,{novedades:S.novedades});
+}
+function finalizarLimpieza(){
+  clearInterval(S.timerInt);
+  var endTime=new Date();
+  patchDoc(S.sessionId,{status:"completed",endTime:firebase.firestore.Timestamp.fromDate(endTime),duration:S.elapsed,novedades:S.novedades,entryCount:S.entryMedia.length,danosCount:S.danosMedia.length,exitCount:S.exitMedia.length});
+  S.lastRec={worker:S.worker,apt:aptLabel(S.selApt),client:S.selApt&&S.selApt.client,valor:(S.selApt&&S.selApt.valor)||0,startTime:S.sessionStart,endTime:endTime,duration:S.elapsed,novedades:S.novedades,entryCount:S.entryMedia.length,danosCount:S.danosMedia.length,exitCount:S.exitMedia.length};
+  S.showModal=false;go("summary");
+}
+function goHome(){
+  clearInterval(S.timerInt);S.sessionId=null;S.worker="";S.selApt=null;S.elapsed=0;
+  S.novedades=[];S.entryMedia=[];S.danosMedia=[];S.exitMedia=[];
+  S.screen="home";render();
+}
+function enterAdmin(){
+  var el=document.getElementById("adm-pass");
+  if(!el||el.value!==PASS){S.adminError="Contrasena incorrecta";render();return}
+  S.adminError="";S.screen="admin";
+  fetchRecs();
+  clearInterval(S.pollInt);
+  S.pollInt=setInterval(fetchRecs,15000);
+}
+function leaveAdmin(){clearInterval(S.pollInt);go("home")}
+function saveAptForm(){
+  var n=document.getElementById("af-name"),c=document.getElementById("af-client"),v=document.getElementById("af-valor");
+  if(!n||!n.value.trim())return;
+  var a={name:n.value.trim().toUpperCase(),client:(c&&c.value.trim().toUpperCase())||"",valor:Number(v&&v.value)||0};
+  if(S.editIdx===-2)S.aptList.push(a);
+  else S.aptList[S.editIdx]=a;
+  saveApts(S.aptList);
+  S.editIdx=-1;S.aptForm={name:"",client:"",valor:0};render();
+}
+function delApt(i){
+  if(!confirm("Eliminar: "+S.aptList[i].name+"?"))return;
+  S.aptList.splice(i,1);saveApts(S.aptList);render();
+}
+function editApt(i){S.editIdx=i;S.aptForm=Object.assign({},S.aptList[i]);render()}
+function addWorker(){
+  var el=document.getElementById("new-worker");
+  if(!el||!el.value.trim())return;
+  S.workerList.push(el.value.trim());saveWorkers(S.workerList);el.value="";render();
+}
+function editWorker(i){
+  var v=prompt("Editar:",S.workerList[i]);
+  if(v&&v.trim()){S.workerList[i]=v.trim();saveWorkers(S.workerList);render()}
+}
+function delWorker(i){
+  if(!confirm("Eliminar: "+S.workerList[i]+"?"))return;
+  S.workerList.splice(i,1);saveWorkers(S.workerList);render();
+}
+function selectWorker(v){S.worker=v;render()}
+function selectApt(v){
+  S.selApt=S.aptList.find(function(a){return aptLabel(a)===v})||null;render();
+}
+function setFDate(v){S.fDate=v;render()}
+function setFWorker(v){S.fWorker=v;render()}
+function setFApt(v){S.fApt=v;render()}
+function clearFilters(){S.fDate="";S.fWorker="";S.fApt="";render()}
+function setDashFrom(v){S.dashFrom=v;render()}
+function setDashTo(v){S.dashTo=v;render()}
+function openDash(){S.screen="dashboard";fetchRecs().then(render)}
+
+// Dashboard calc
+function getDashData(){
+  var from=S.dashFrom?new Date(S.dashFrom+" 00:00:00"):null;
+  var to=S.dashTo?new Date(S.dashTo+" 23:59:59"):null;
+  var completed=S.allRecs.filter(function(r){
+    if(r.status!=="completed")return false;
+    var d=toDate(r.endTime||r.startTime);
+    if(from&&d<from)return false;
+    if(to&&d>to)return false;
+    return true;
+  });
+  var byC={};
+  completed.forEach(function(r){
+    var c=r.client||"Sin cliente";
+    if(!byC[c])byC[c]={client:c,count:0,valor:0,dur:0};
+    byC[c].count++;byC[c].valor+=r.valor||0;byC[c].dur+=r.duration||0;
+  });
+  var clients=Object.values(byC).sort(function(a,b){return b.count-a.count});
+  var now=new Date();
+  var months=[];
+  for(var i=0;i<6;i++){
+    var d=new Date(now.getFullYear(),now.getMonth()-(5-i),1);
+    months.push({label:MONTHS[d.getMonth()]+" "+String(d.getFullYear()).slice(2),year:d.getFullYear(),month:d.getMonth(),count:0,valor:0});
+  }
+  S.allRecs.filter(function(r){return r.status==="completed"}).forEach(function(r){
+    var d=toDate(r.endTime||r.startTime);
+    var m=months.find(function(x){return x.year===d.getFullYear()&&x.month===d.getMonth()});
+    if(m){m.count++;m.valor+=r.valor||0}
+  });
+  var totalValor=completed.reduce(function(a,r){return a+(r.valor||0)},0);
+  var totalCount=completed.length;
+  var avgDur=totalCount?Math.round(completed.reduce(function(a,r){return a+(r.duration||0)},0)/totalCount):0;
+  var cm=now.getMonth(),cy=now.getFullYear(),pm=cm===0?11:cm-1,py=cm===0?cy-1:cy;
+  var curD=S.allRecs.filter(function(r){if(r.status!=="completed")return false;var d=toDate(r.endTime||r.startTime);return d.getMonth()===cm&&d.getFullYear()===cy});
+  var prevD=S.allRecs.filter(function(r){if(r.status!=="completed")return false;var d=toDate(r.endTime||r.startTime);return d.getMonth()===pm&&d.getFullYear()===py});
+  return{completed:completed,clients:clients,months:months,totalValor:totalValor,totalCount:totalCount,avgDur:avgDur,curD:curD,prevD:prevD};
+}
+
+// ── SCREENS ──────────────────────────────────────────────────────────
+function sHome(){
+  var ao="",wo="";
+  S.aptList.slice().sort(function(a,b){return a.name.localeCompare(b.name)}).forEach(function(a){
+    var label=aptLabel(a);
+    var sel=S.selApt&&aptLabel(S.selApt)===label;
+    ao+='<option value="'+esc(label)+'"'+(sel?" selected":"")+'>'+esc(label)+(a.valor>0?" - "+pesos(a.valor):"")+'</option>';
+  });
+  S.workerList.forEach(function(w){wo+='<option value="'+esc(w)+'"'+(S.worker===w?" selected":"")+'>'+esc(w)+'</option>';});
+  var aptInfo=S.selApt?'<div style="background:#f0fdf4;border-radius:9px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between"><span style="color:'+G+';font-weight:700;font-size:13px">Cliente: '+esc(S.selApt.client||"Sin asignar")+'</span>'+(S.selApt.valor>0?'<span style="color:'+PU+';font-weight:700;font-size:13px">'+pesos(S.selApt.valor)+'</span>':'')+'</div>':"";
+  return'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px 0 12px">'+
+    '<div><div style="font-size:36px">🧹</div><h1 style="font-size:22px;font-weight:800;color:#111827;margin:6px 0 2px">Control de Limpieza</h1><p style="color:#6b7280;font-size:13px">Gestion de apartamentos</p></div>'+
+    '<button onclick="go(\'settings\')" style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:14px;font-weight:700;margin-top:8px">Gestion</button></div>'+
+    '<div class="card">'+
+    '<div class="lbl">TRABAJADOR</div>'+
+    '<select onchange="selectWorker(this.value)"><option value="">Seleccionar trabajador...</option>'+wo+'</select>'+
+    '<div class="lbl">APARTAMENTO</div>'+
+    '<select onchange="selectApt(this.value)"><option value="">Seleccionar apartamento...</option>'+ao+'</select>'+
+    aptInfo+
+    '<button class="btn" onclick="startCleaning()" style="background:'+(S.worker&&S.selApt?G:"#9ca3af")+';font-size:16px;padding:14px;margin-top:4px">Iniciar Limpieza</button></div>'+
+    '<button class="btn" onclick="go(\'adminLogin\')" style="background:'+B+';margin-top:0">Panel de Administrador</button>';
+}
+
+function sSettings(){
+  var isApts=S.sTab==="apts";
+  var formH="";
+  if(S.editIdx===-2||S.editIdx>=0){
+    var a=S.aptForm;
+    formH='<div class="card"><div style="font-weight:700;margin-bottom:12px;font-size:15px">'+(S.editIdx===-2?"Agregar":"Editar")+' Apartamento</div>'+
+      '<div class="lbl">NOMBRE</div><input id="af-name" value="'+esc(a.name)+'" placeholder="Ej: 201 LAURELES">'+
+      '<div class="lbl">CLIENTE</div><input id="af-client" value="'+esc(a.client)+'" placeholder="Ej: TCG">'+
+      '<div class="lbl">VALOR ($)</div><input id="af-valor" type="number" value="'+Number(a.valor||0)+'" min="0">'+
+      '<button class="btn" onclick="saveAptForm()" style="background:'+G+';margin-top:4px">Guardar</button>'+
+      '<button class="btn" onclick="S.editIdx=-1;render()" style="background:#9ca3af">Cancelar</button></div>';
+  } else {
+    formH='<button class="btn" onclick="S.editIdx=-2;S.aptForm={name:\'\',client:\'\',valor:0};render()" style="background:'+G+';margin-top:0;margin-bottom:4px">+ Agregar Apartamento</button>';
+  }
+  var listH="";
+  S.aptList.forEach(function(a,idx){
+    listH+='<div class="irow"><div><div style="font-weight:700;font-size:14px">'+esc(a.name)+'</div>'+
+      '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">'+
+      (a.client?'<span style="background:#eff6ff;color:'+B+';padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">'+esc(a.client)+'</span>':'')+
+      (a.valor>0?'<span style="color:'+PU+';font-weight:700;font-size:12px">'+pesos(a.valor)+'</span>':'')+
+      '</div></div>'+
+      '<div style="display:flex;gap:6px">'+
+      '<button onclick="editApt('+idx+')" style="background:#eff6ff;color:'+B+';border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-weight:600;font-size:13px">Editar</button>'+
+      '<button onclick="delApt('+idx+')" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:13px">Borrar</button>'+
+      '</div></div>';
+  });
+  var wListH="";
+  S.workerList.forEach(function(w,i){
+    wListH+='<div class="irow"><span style="font-size:14px;font-weight:500">'+esc(w)+'</span>'+
+      '<div style="display:flex;gap:6px">'+
+      '<button onclick="editWorker('+i+')" style="background:#eff6ff;color:'+B+';border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-weight:600;font-size:13px">Editar</button>'+
+      '<button onclick="delWorker('+i+')" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:13px">Borrar</button>'+
+      '</div></div>';
+  });
+  return'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
+    '<button onclick="go(\'home\')" style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:6px 14px;cursor:pointer;font-weight:700;font-size:14px">Volver</button>'+
+    '<div><h2 style="font-size:19px;color:#111827">Gestion</h2><p style="font-size:12px;color:#6b7280">Apartamentos y trabajadores</p></div></div>'+
+    '<div style="display:flex;gap:4px;margin-bottom:16px;background:white;border-radius:12px;padding:4px;box-shadow:0 1px 3px rgba(0,0,0,.08)">'+
+    '<button class="tab" onclick="S.sTab=\'apts\';render()" style="background:'+(isApts?G:"transparent")+';color:'+(isApts?"white":"#6b7280")+'">Apartamentos ('+S.aptList.length+')</button>'+
+    '<button class="tab" onclick="S.sTab=\'workers\';render()" style="background:'+(!isApts?G:"transparent")+';color:'+(!isApts?"white":"#6b7280")+'">Trabajadores ('+S.workerList.length+')</button>'+
+    '</div>'+
+    (isApts?formH+'<div class="card"><div class="lbl">LISTA</div>'+listH+'</div>':
+      '<div class="card"><div class="lbl">AGREGAR</div><div style="display:flex;gap:8px"><input id="new-worker" placeholder="Ej: Carlos Perez" style="flex:1;margin:0" onkeydown="if(event.key===\'Enter\')addWorker()"><button onclick="addWorker()" style="background:'+G+';color:white;border:none;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:18px">+</button></div></div>'+
+      '<div class="card"><div class="lbl">TRABAJADORES</div>'+wListH+'</div>');
+}
+
+function sActive(){
+  var modal=S.showModal?'<div class="overlay"><div class="mbox">'+
+    '<div style="text-align:center;margin-bottom:16px"><div style="font-size:40px">🚪</div><h3 style="margin:8px 0 4px">Evidencia de Salida</h3><p style="color:#6b7280;font-size:14px">Graba o toma fotos del estado final</p></div>'+
+    mediaBtnsH("readFiles(this.files,'exitMedia')","readFiles(this.files,'exitMedia')",G,G)+
+    mediaGridH(S.exitMedia)+
+    '<button class="btn" onclick="finalizarLimpieza()" style="background:'+R+';padding:14px;margin-top:14px">Confirmar Finalizacion</button>'+
+    '<button class="btn" onclick="S.showModal=false;render()" style="background:#9ca3af;margin-top:8px">Cancelar</button>'+
+    '</div></div>':"";
+  var novForm=S.showNov?
+    '<textarea id="novta" placeholder="Escribir novedad..." style="height:80px;margin-top:6px">'+esc(S.novDraft)+'</textarea>'+
+    '<button class="btn" onclick="addNov()" style="background:'+G+';margin-top:6px">Guardar</button>'+
+    '<button class="btn" onclick="S.showNov=false;S.novDraft=\'\';render()" style="background:#9ca3af;margin-top:6px">Cancelar</button>':
+    '<button class="btn" onclick="S.showNov=true;render()" style="background:'+O+';margin-top:0">+ Agregar Novedad</button>';
+  var apt=S.selApt||{};
+  return'<div style="background:linear-gradient(135deg,'+G+',#15803d);border-radius:16px;padding:20px;color:white;margin-bottom:12px;text-align:center">'+
+    '<div style="font-size:11px;font-weight:700;opacity:.85;margin-bottom:4px">LIMPIEZA EN CURSO</div>'+
+    '<div style="font-size:18px;font-weight:800">'+esc(aptLabel(apt))+'</div>'+
+    '<div style="font-size:13px;opacity:.8;margin-bottom:8px">'+esc(apt.client||"")+'</div>'+
+    '<div style="font-size:14px;opacity:.85;margin-bottom:10px">'+esc(S.worker)+'</div>'+
+    '<div id="tmr" style="font-size:50px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:2px;line-height:1">'+fmt(S.elapsed)+'</div>'+
+    '<div style="font-size:12px;opacity:.75;margin-top:6px">'+(S.sessionStart?"Inicio: "+fmtHour(S.sessionStart):"")+'</div></div>'+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:700;font-size:15px">Evidencia Entrada</span><span class="bdg" style="background:#eff6ff;color:'+B+'">'+S.entryMedia.length+'</span></div>'+
+    mediaBtnsH("readFiles(this.files,'entryMedia')","readFiles(this.files,'entryMedia')",B,B)+mediaGridH(S.entryMedia)+'</div>'+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:700;font-size:15px">Novedades</span><span class="bdg" style="background:#fef3c7;color:'+O+'">'+S.novedades.length+'</span></div>'+
+    novH(S.novedades)+novForm+'</div>'+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:700;font-size:15px">Evidencia de Danos</span><span class="bdg" style="background:#fff1f2;color:'+R+'">'+S.danosMedia.length+'</span></div>'+
+    '<label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 16px;background:'+R+';color:white;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Fotografiar Dano<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="readFiles(this.files,\'danosMedia\')"></label>'+
+    mediaGridH(S.danosMedia)+'</div>'+
+    '<button class="btn" onclick="S.showModal=true;render()" style="background:'+R+';padding:15px;font-size:16px;margin-top:4px">Finalizar Limpieza</button>'+modal;
+}
+
+function sSummary(){
+  var r=S.lastRec;if(!r)return"";
+  return'<div style="text-align:center;padding:24px 0 16px"><div style="font-size:56px">✅</div><h2 style="margin:10px 0 4px;color:'+G+';font-size:22px">Limpieza Completada</h2><p style="color:#6b7280;font-size:14px">'+fmtDate(r.endTime)+'</p></div>'+
+    '<div class="card">'+
+    [["Trabajador",r.worker],["Apartamento",r.apt],["Cliente",r.client],["Valor",pesos(r.valor)],["Duracion",fmt(r.duration)],["Inicio",fmtHour(r.startTime)],["Fin",fmtHour(r.endTime)]].map(function(x,i,a){
+      return'<div class="hrow" style="'+(i===a.length-1?"border:none":"")+'"><span style="font-size:14px;color:#6b7280">'+x[0]+'</span><span style="font-weight:700">'+esc(x[1])+'</span></div>';
+    }).join("")+'</div>'+
+    (r.novedades&&r.novedades.length?'<div class="card"><div style="font-weight:700;margin-bottom:10px">Novedades</div>'+novH(r.novedades)+'</div>':'')+
+    (S.entryMedia.length?'<div class="card"><div style="font-weight:700;margin-bottom:8px">Entrada</div>'+mediaGridH(S.entryMedia)+'</div>':'')+
+    (S.danosMedia.length?'<div class="card"><div style="font-weight:700;margin-bottom:8px">Danos</div>'+mediaGridH(S.danosMedia)+'</div>':'')+
+    (S.exitMedia.length?'<div class="card"><div style="font-weight:700;margin-bottom:8px">Salida</div>'+mediaGridH(S.exitMedia)+'</div>':'')+
+    '<button class="btn" onclick="goHome()" style="background:'+G+';padding:14px;font-size:16px;margin-top:0">Nueva Limpieza</button>'+
+    '<button class="btn" onclick="go(\'adminLogin\')" style="background:'+B+';margin-top:10px">Panel Admin</button>';
+}
+
+function sAdminLogin(){
+  return'<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh">'+
+    '<div style="font-size:52px;margin-bottom:16px">🔐</div>'+
+    '<h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:6px">Panel de Administrador</h2>'+
+    '<p style="color:#6b7280;font-size:14px;margin-bottom:24px">Ingresa la contrasena</p>'+
+    '<div class="card" style="width:100%"><div class="lbl">CONTRASENA</div>'+
+    '<input type="password" id="adm-pass" placeholder="..." onkeydown="if(event.key===\'Enter\')enterAdmin()" style="font-size:18px;letter-spacing:4px">'+
+    (S.adminError?'<div style="color:'+R+';font-size:13px;margin-bottom:8px;font-weight:600">'+S.adminError+'</div>':'')+
+    '<button class="btn" onclick="enterAdmin()" style="background:'+B+';margin-top:4px">Entrar</button></div>'+
+    '<button onclick="go(\'home\')" style="background:none;border:none;color:#6b7280;margin-top:16px;cursor:pointer;font-size:14px">Volver</button></div>';
+}
+
+function sAdmin(){
+  var live=S.adminRecs.filter(function(r){return r.status==="active"});
+  var done=S.adminRecs.filter(function(r){return r.status==="completed"});
+  var todayStr=new Date().toDateString();
+  var todayDone=done.filter(function(r){return toDate(r.endTime).toDateString()===todayStr});
+  var avgDurT=todayDone.length?Math.round(todayDone.reduce(function(a,r){return a+(r.duration||0)},0)/todayDone.length):0;
+  var totalHoy=todayDone.reduce(function(a,r){return a+(r.valor||0)},0);
+  var filtered=done.filter(function(r){
+    if(S.fDate&&toDate(r.endTime).toISOString().slice(0,10)!==S.fDate)return false;
+    if(S.fWorker&&r.worker!==S.fWorker)return false;
+    if(S.fApt&&r.apt!==S.fApt)return false;
+    return true;
+  });
+  var workers=[];done.forEach(function(r){if(workers.indexOf(r.worker)<0)workers.push(r.worker)});workers.sort();
+  var apts=[];done.forEach(function(r){if(apts.indexOf(r.apt)<0)apts.push(r.apt)});apts.sort();
+  var wOpts='<option value="">Todos los trabajadores</option>';workers.forEach(function(w){wOpts+='<option value="'+esc(w)+'"'+(S.fWorker===w?" selected":"")+'>'+esc(w)+'</option>';});
+  var aOpts='<option value="">Todos los apartamentos</option>';apts.forEach(function(a){aOpts+='<option value="'+esc(a)+'"'+(S.fApt===a?" selected":"")+'>'+esc(a)+'</option>';});
+  var liveH=live.map(function(r){
+    return'<div class="ac" style="border-left-color:'+G+';background:#f0fdf4">'+
+      '<div style="display:flex;justify-content:space-between"><div>'+
+      '<div style="font-weight:700;font-size:15px">'+esc(r.apt)+'</div>'+
+      (r.client?'<span style="background:#dcfce7;color:'+G+';font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px">'+esc(r.client)+'</span>':'')+
+      '<div style="font-size:13px;color:#6b7280;margin-top:4px">'+esc(r.worker)+'</div></div>'+
+      '<div style="background:#dcfce7;color:'+G+';padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;height:fit-content">ACTIVO</div></div>'+
+      (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #bbf7d0">'+novH(r.novedades)+'</div>':'')+
+      '</div>';
+  }).join("");
+  var doneH=filtered.map(function(r){
+    return'<div class="ac">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+      '<div><div style="font-weight:700;font-size:15px">'+esc(r.apt)+'</div>'+
+      (r.client?'<span style="background:#eff6ff;color:'+B+';font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px">'+esc(r.client)+'</span>':'')+
+      '<div style="font-size:13px;color:#6b7280;margin-top:4px">'+esc(r.worker)+'</div>'+
+      '<div style="font-size:12px;color:#9ca3af">'+fmtDate(toDate(r.endTime))+' '+fmtHour(toDate(r.startTime))+'-'+fmtHour(toDate(r.endTime))+'</div></div>'+
+      '<div style="text-align:right"><div style="font-weight:900;color:'+G+';font-size:18px">'+fmt(r.duration||0)+'</div>'+
+      (r.valor>0?'<div style="font-weight:800;color:'+PU+';font-size:14px">'+pesos(r.valor)+'</div>':'')+
+      '<div style="font-size:11px;color:#9ca3af">'+((r.entryCount||0)+(r.danosCount||0)+(r.exitCount||0))+' arch</div></div></div>'+
+      (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6">'+novH(r.novedades)+'</div>':'')+
+      '</div>';
+  }).join("");
+  return'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+
+    '<button onclick="leaveAdmin()" style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:6px 14px;cursor:pointer;font-weight:700;font-size:14px">Volver</button>'+
+    '<div style="flex:1"><h2 style="font-size:19px;color:#111827">Panel Admin</h2><p style="font-size:12px;color:#6b7280">Tiempo real</p></div>'+
+    '<button onclick="openDash()" style="background:'+PU+';color:white;border:none;border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:700;font-size:13px">Dashboard</button></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+    '<div class="sbox"><div style="font-weight:900;color:'+G+';font-size:28px">'+live.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">EN CURSO</div></div>'+
+    '<div class="sbox"><div style="font-weight:900;color:'+B+';font-size:28px">'+todayDone.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">HOY</div></div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
+    '<div class="sbox"><div style="font-weight:900;color:'+O+';font-size:18px">'+fmt(avgDurT)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">PROMEDIO HOY</div></div>'+
+    '<div class="sbox"><div style="font-weight:900;color:'+PU+';font-size:16px">'+pesos(totalHoy)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">INGRESOS HOY</div></div></div>'+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-weight:700;font-size:14px">Filtros</span>'+
+    ((S.fDate||S.fWorker||S.fApt)?'<button onclick="clearFilters()" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">Limpiar</button>':'')+
+    '</div><input type="date" value="'+S.fDate+'" onchange="setFDate(this.value)">'+
+    '<select onchange="setFWorker(this.value)">'+wOpts+'</select>'+
+    '<select onchange="setFApt(this.value)" style="margin-bottom:0">'+aOpts+'</select></div>'+
+    (live.length?'<div class="lbl" style="margin-bottom:8px">EN CURSO ('+live.length+')</div>'+liveH:'')+
+    '<div class="lbl" style="margin-bottom:8px;margin-top:4px">HISTORIAL ('+filtered.length+' de '+done.length+')</div>'+
+    (!filtered.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros</p>':doneH);
+}
+
+function sDashboard(){
+  var data=getDashData();
+  var completed=data.completed,clients=data.clients,months=data.months;
+  var totalValor=data.totalValor,totalCount=data.totalCount,avgDur=data.avgDur;
+  var curD=data.curD,prevD=data.prevD;
+  var curValor=curD.reduce(function(a,r){return a+(r.valor||0)},0);
+  var prevValor=prevD.reduce(function(a,r){return a+(r.valor||0)},0);
+  var diff=curD.length-prevD.length;
+  var diffPct=prevD.length>0?Math.round((Math.abs(diff)/prevD.length)*100):0;
+  var maxCount=Math.max.apply(null,months.map(function(m){return m.count}))||1;
+  var maxValor=Math.max.apply(null,months.map(function(m){return m.valor}))||1;
+  var barsCount=months.map(function(m){
+    var pct=Math.round(m.count/maxCount*100);
+    return'<div style="text-align:center;flex:1">'+
+      '<div style="height:120px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px">'+
+      '<div style="width:28px;background:'+G+';border-radius:4px 4px 0 0;height:'+pct+'%;min-height:'+(m.count>0?8:0)+'px"></div></div>'+
+      '<div style="font-size:11px;color:#111827;font-weight:700">'+m.count+'</div>'+
+      '<div style="font-size:9px;color:#9ca3af">'+m.label+'</div></div>';
+  }).join("");
+  var barsValor=months.map(function(m){
+    var pct=Math.round(m.valor/maxValor*100);
+    return'<div style="text-align:center;flex:1">'+
+      '<div style="height:120px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px">'+
+      '<div style="width:28px;background:'+PU+';border-radius:4px 4px 0 0;height:'+pct+'%;min-height:'+(m.valor>0?8:0)+'px"></div></div>'+
+      '<div style="font-size:10px;color:#111827;font-weight:700">'+(m.valor>=1000?Math.round(m.valor/1000)+"k":m.valor)+'</div>'+
+      '<div style="font-size:9px;color:#9ca3af">'+m.label+'</div></div>';
+  }).join("");
+  var maxClientCount=clients.length?clients[0].count:1;
+  var clientsH=!clients.length?'<p style="color:#9ca3af;text-align:center;padding:12px">Sin datos en el rango</p>':
+    clients.map(function(c,i){
+      var pct=Math.round(c.count/maxClientCount*100);
+      return'<div style="padding:12px;background:#f9fafb;border-radius:10px;margin-bottom:8px;border-left:4px solid '+COLORS[i%COLORS.length]+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'+
+        '<div><div style="font-weight:800;font-size:15px">'+esc(c.client)+'</div>'+
+        '<div style="font-size:12px;color:#6b7280;margin-top:3px"><span style="font-weight:700;color:'+G+'">'+c.count+'</span> limpiezas'+(c.count>0?' · prom '+fmt(Math.round(c.dur/c.count)):'')+' · '+Math.round(c.count/(totalCount||1)*100)+'% del total</div></div>'+
+        '<div style="text-align:right"><div style="font-weight:900;color:'+PU+';font-size:15px">'+pesos(c.valor)+'</div></div></div>'+
+        '<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%;background:'+COLORS[i%COLORS.length]+'">'+c.count+'</div></div>'+
+        '</div>';
+    }).join("")+
+    '<div style="margin-top:8px;padding:10px 12px;background:#f0fdf4;border-radius:10px;display:flex;justify-content:space-between"><span style="font-weight:700;color:'+G+'">TOTAL</span><span style="font-weight:900;color:'+PU+'">'+pesos(totalValor)+'</span></div>';
+  return'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'+
+    '<button onclick="go(\'admin\')" style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:6px 14px;cursor:pointer;font-weight:700;font-size:14px">Volver</button>'+
+    '<div style="flex:1"><h2 style="font-size:19px;color:#111827">Dashboard</h2><p style="font-size:12px;color:#6b7280">Analisis de limpiezas</p></div>'+
+    '<button onclick="fetchRecs().then(render)" style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:700">Actualizar</button></div>'+
+    '<div class="card"><div style="font-weight:700;margin-bottom:10px;font-size:14px">Rango de Fechas</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+    '<div><div class="lbl">DESDE</div><input type="date" value="'+S.dashFrom+'" onchange="setDashFrom(this.value)" style="margin:0"></div>'+
+    '<div><div class="lbl">HASTA</div><input type="date" value="'+S.dashTo+'" onchange="setDashTo(this.value)" style="margin:0"></div></div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+    '<div class="sbox"><div style="font-weight:900;color:'+G+';font-size:22px">'+totalCount+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">TOTAL LIMPIEZAS</div></div>'+
+    '<div class="sbox"><div style="font-weight:900;color:'+PU+';font-size:16px">'+pesos(totalValor)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">TOTAL VALOR</div></div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
+    '<div class="sbox"><div style="font-weight:900;color:'+O+';font-size:18px">'+fmt(avgDur)+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">DURACION PROM</div></div>'+
+    '<div class="sbox"><div style="font-weight:900;color:'+B+';font-size:22px">'+clients.length+'</div><div style="font-size:11px;color:#6b7280;font-weight:700">CLIENTES</div></div></div>'+
+    '<div class="card"><div style="font-weight:700;margin-bottom:12px;font-size:14px">Mes Actual vs Anterior</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div style="text-align:center;padding:12px;background:#f0fdf4;border-radius:10px"><div style="font-size:11px;color:#6b7280;font-weight:700;margin-bottom:4px">MES ACTUAL</div><div style="font-size:36px;font-weight:900;color:'+G+'">'+curD.length+'</div><div style="font-size:13px;color:'+G+';font-weight:700">'+pesos(curValor)+'</div></div>'+
+    '<div style="text-align:center;padding:12px;background:#f9fafb;border-radius:10px"><div style="font-size:11px;color:#6b7280;font-weight:700;margin-bottom:4px">MES ANTERIOR</div><div style="font-size:36px;font-weight:900;color:#9ca3af">'+prevD.length+'</div><div style="font-size:13px;color:#9ca3af;font-weight:700">'+pesos(prevValor)+'</div></div></div>'+
+    (prevD.length>0?'<div style="text-align:center;margin-top:10px;padding:8px;background:'+(diff>=0?"#f0fdf4":"#fff1f2")+';border-radius:8px"><span style="font-weight:700;color:'+(diff>=0?G:R)+';font-size:14px">'+(diff>=0?"Mas":"Menos")+' '+Math.abs(diff)+' limpiezas ('+diffPct+'%) vs mes anterior</span></div>':'')+
+    '</div>'+
+    '<div class="card"><div style="font-weight:700;margin-bottom:16px;font-size:14px">Limpiezas por Mes</div><div style="display:flex;align-items:flex-end;gap:4px;height:150px">'+barsCount+'</div></div>'+
+    '<div class="card"><div style="font-weight:700;margin-bottom:16px;font-size:14px">Valor por Mes</div><div style="display:flex;align-items:flex-end;gap:4px;height:150px">'+barsValor+'</div></div>'+
+    '<div class="card"><div style="font-weight:700;margin-bottom:12px;font-size:14px">Por Cliente</div>'+clientsH+'</div>';
+}
+
+loadConfig();
 </script>
 </body>
 </html>
