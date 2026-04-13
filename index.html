@@ -285,6 +285,13 @@ function delWorker(idx){
   if(!confirm("¿Eliminar '"+S.workers[idx]+"'?"))return;
   S.workers.splice(idx,1);saveWorkers();render();
 }
+function delRec(id,apt){
+  if(!confirm("¿Eliminar el registro de limpieza?\n\nApartamento: "+apt+"\n\nEsta acción no se puede deshacer."))return;
+  db.collection("limpiezas").doc(id).delete().then(function(){
+    S.recs=S.recs.filter(function(r){return r.id!==id});
+    render();
+  }).catch(function(e){alert("Error al eliminar: "+e.message)});
+}
 
 // ── RENDER ────────────────────────────────────────────────────────────
 function render(){
@@ -581,6 +588,9 @@ function tabHist(){
       '<div style="font-weight:800;color:'+PU+';font-size:15px">'+pesos(r.valor||0)+'</div>'+
       '</div></div>'+
       (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6">'+novH(r.novedades)+'</div>':'')+
+      '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f3f4f6;display:flex;justify-content:flex-end">'+
+      '<button onclick="delRec(\''+r.id+'\',\''+esc(r.apt)+'\')" style="background:#fff1f2;color:'+R+';border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px">🗑️ Eliminar registro</button>'+
+      '</div>'+
       '</div>';
   }).join("");
   return'<div class="card" style="padding:14px">'+
