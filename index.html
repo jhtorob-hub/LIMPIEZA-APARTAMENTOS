@@ -83,7 +83,7 @@ var S={
   // login/panel
   passErr:"",role:"",
   recs:[],poll:null,
-  fD:"",fW:"",fA:"",fC:"",
+  hFrom:"",hTo:"",fW:"",fA:"",fC:"",
   // gerencia
   gTab:"deuda",
   dFrom:(function(){var d=new Date();d.setDate(1);return d.toISOString().slice(0,10)})(),
@@ -222,7 +222,7 @@ function tryLogin(){
 }
 function leavePanel(){
   clearInterval(S.poll);S.poll=null;
-  Object.assign(S,{screen:"home",role:"",passErr:"",fD:"",fW:"",fA:"",fC:"",recs:[]});
+  Object.assign(S,{screen:"home",role:"",passErr:"",hFrom:"",hTo:"",fW:"",fA:"",fC:"",recs:[]});
   render();
 }
 
@@ -407,11 +407,16 @@ function pgAdm(){
   var workers=[];done.forEach(function(r){if(r.worker&&workers.indexOf(r.worker)<0)workers.push(r.worker)});workers.sort();
   var apts=[];done.forEach(function(r){if(r.apt&&apts.indexOf(r.apt)<0)apts.push(r.apt)});apts.sort();
   var fil=done.filter(function(r){
-    if(S.fD&&td(r.endTime).toISOString().slice(0,10)!==S.fD)return false;
+    var d=td(r.endTime);
+    if(S.hFrom&&d<new Date(S.hFrom+" 00:00:00"))return false;
+    if(S.hTo&&d>new Date(S.hTo+" 23:59:59"))return false;
     if(S.fW&&r.worker!==S.fW)return false;
     if(S.fA&&r.apt!==S.fA)return false;
     return true;
   });
+  var wOp='<option value="">Todos los trabajadores</option>'+workers.map(function(w){return'<option value="'+esc(w)+'"'+(S.fW===w?" selected":"")+'>'+esc(w)+'</option>'}).join("");
+  var aOp='<option value="">Todos los apartamentos</option>'+apts.map(function(a){return'<option value="'+esc(a)+'"'+(S.fA===a?" selected":"")+'>'+esc(a)+'</option>'}).join("");
+  var hasFilter=S.hFrom||S.hTo||S.fW||S.fA;
   var wOp='<option value="">Todos los trabajadores</option>'+workers.map(function(w){return'<option value="'+esc(w)+'"'+(S.fW===w?" selected":"")+'>'+esc(w)+'</option>'}).join("");
   var aOp='<option value="">Todos los apartamentos</option>'+apts.map(function(a){return'<option value="'+esc(a)+'"'+(S.fA===a?" selected":"")+'>'+esc(a)+'</option>'}).join("");
   var liveH=live.map(function(r){
@@ -447,9 +452,12 @@ function pgAdm(){
     '<div class="card" style="padding:14px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
     '<span style="font-weight:700;font-size:13px">🔍 Filtros</span>'+
-    ((S.fD||S.fW||S.fA)?'<button onclick="S.fD=\'\';S.fW=\'\';S.fA=\'\';render()" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Limpiar</button>':'')+
+    (hasFilter?'<button onclick="S.hFrom=\'\';S.hTo=\'\';S.fW=\'\';S.fA=\'\';render()" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Limpiar</button>':'')+
     '</div>'+
-    '<input type="date" class="inp" value="'+S.fD+'" onchange="S.fD=this.value;render()" style="margin-bottom:8px">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+    '<div><label class="lbl">Desde</label><input type="date" class="inp" value="'+S.hFrom+'" onchange="S.hFrom=this.value;render()" style="margin:0"></div>'+
+    '<div><label class="lbl">Hasta</label><input type="date" class="inp" value="'+S.hTo+'" onchange="S.hTo=this.value;render()" style="margin:0"></div>'+
+    '</div>'+
     '<select class="inp" onchange="S.fW=this.value;render()" style="margin-bottom:8px">'+wOp+'</select>'+
     '<select class="inp" onchange="S.fA=this.value;render()" style="margin-bottom:0">'+aOp+'</select>'+
     '</div>'+
@@ -540,13 +548,16 @@ function tabHist(){
   var apts=[];done.forEach(function(r){if(r.apt&&apts.indexOf(r.apt)<0)apts.push(r.apt)});apts.sort();
   var clients=[];done.forEach(function(r){if(r.client&&clients.indexOf(r.client)<0)clients.push(r.client)});clients.sort();
   var fil=done.filter(function(r){
-    if(S.fD&&td(r.endTime).toISOString().slice(0,10)!==S.fD)return false;
+    var d=td(r.endTime);
+    if(S.hFrom&&d<new Date(S.hFrom+" 00:00:00"))return false;
+    if(S.hTo&&d>new Date(S.hTo+" 23:59:59"))return false;
     if(S.fW&&r.worker!==S.fW)return false;
     if(S.fA&&r.apt!==S.fA)return false;
     if(S.fC&&r.client!==S.fC)return false;
     return true;
   });
   var tv=fil.reduce(function(a,r){return a+(Number(r.valor)||0)},0);
+  var hasFilter=S.hFrom||S.hTo||S.fW||S.fA||S.fC;
   var wOp='<option value="">Todos los trabajadores</option>'+workers.map(function(w){return'<option value="'+esc(w)+'"'+(S.fW===w?" selected":"")+'>'+esc(w)+'</option>'}).join("");
   var aOp='<option value="">Todos los apartamentos</option>'+apts.map(function(a){return'<option value="'+esc(a)+'"'+(S.fA===a?" selected":"")+'>'+esc(a)+'</option>'}).join("");
   var cOp='<option value="">Todos los clientes</option>'+clients.map(function(c){return'<option value="'+esc(c)+'"'+(S.fC===c?" selected":"")+'>'+esc(c)+'</option>'}).join("");
@@ -575,9 +586,12 @@ function tabHist(){
   return'<div class="card" style="padding:14px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
     '<span style="font-weight:700;font-size:13px">🔍 Filtros</span>'+
-    ((S.fD||S.fW||S.fA||S.fC)?'<button onclick="S.fD=\'\';S.fW=\'\';S.fA=\'\';S.fC=\'\';render()" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Limpiar</button>':'')+
+    (hasFilter?'<button onclick="S.hFrom=\'\';S.hTo=\'\';S.fW=\'\';S.fA=\'\';S.fC=\'\';render()" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Limpiar</button>':'')+
     '</div>'+
-    '<input type="date" class="inp" value="'+S.fD+'" onchange="S.fD=this.value;render()" style="margin-bottom:8px">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+    '<div><label class="lbl">Desde</label><input type="date" class="inp" value="'+S.hFrom+'" onchange="S.hFrom=this.value;render()" style="margin:0"></div>'+
+    '<div><label class="lbl">Hasta</label><input type="date" class="inp" value="'+S.hTo+'" onchange="S.hTo=this.value;render()" style="margin:0"></div>'+
+    '</div>'+
     '<select class="inp" onchange="S.fW=this.value;render()" style="margin-bottom:8px">'+wOp+'</select>'+
     '<select class="inp" onchange="S.fA=this.value;render()" style="margin-bottom:8px">'+aOp+'</select>'+
     '<select class="inp" onchange="S.fC=this.value;render()" style="margin-bottom:0">'+cOp+'</select>'+
