@@ -599,27 +599,31 @@ function tabCfg(){
     '</div>';
 
   if(isApts){
-    // ── Formulario de creación/edición ───────────────────────────────
-    var form="";
+    // ── Formulario como overlay/sheet (siempre visible en móvil) ─────
+    var formOverlay="";
     if(S.aptForm!==null){
       var ea=S.aptForm;
-      form='<div class="alert-form">'+
-        '<div style="font-weight:800;font-size:16px;color:'+G+';margin-bottom:14px">'+(ea.idx===-1?"➕ Nuevo Apartamento":"✏️ Editando: "+esc(ea.name||""))+'</div>'+
+      formOverlay='<div class="overlay" style="z-index:300"><div class="sheet">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
+        '<div style="font-weight:900;font-size:17px;color:'+G+'">'+(ea.idx===-1?"➕ Nuevo Apartamento":"✏️ Editar Apartamento")+'</div>'+
+        '<button onclick="cancelAptForm()" style="background:#f3f4f6;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;font-family:inherit">✕</button>'+
+        '</div>'+
         '<label class="lbl">Nombre del Apartamento *</label>'+
         '<input id="fn" class="inp" type="text" placeholder="Ej: 1103" value="'+esc(ea.name)+'">'+
         '<label class="lbl">Nombre del Cliente *</label>'+
         '<input id="fc" class="inp" type="text" placeholder="Ej: TCG" value="'+esc(ea.client)+'">'+
-        '<label class="lbl">Valor del Servicio en Pesos ($) *</label>'+
-        '<input id="fv" class="inp" type="number" min="0" step="1000" placeholder="Ej: 50000" value="'+Number(ea.valor||0)+'">'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">'+
-        '<button onclick="saveAptForm()" class="btn" style="background:'+G+';margin-top:0">✅ Guardar</button>'+
-        '<button onclick="cancelAptForm()" class="btn" style="background:'+GR+';margin-top:0">Cancelar</button>'+
+        '<label class="lbl">Valor del Servicio ($)</label>'+
+        '<input id="fv" class="inp" type="number" inputmode="numeric" min="0" step="1000" placeholder="Ej: 50000" value="'+Number(ea.valor||0)+'">'+
+        (ea.valor>0?'<div style="background:#f5f3ff;border-radius:9px;padding:10px 12px;margin-bottom:10px;text-align:center">'+
+        '<span style="font-size:13px;color:#6b7280">Valor configurado: </span>'+
+        '<span style="font-size:16px;font-weight:900;color:'+PU+'">'+pesos(ea.valor)+'</span></div>':'')+
+        '<button onclick="saveAptForm()" class="btn" style="background:'+G+';margin-top:4px;padding:14px;font-size:16px">✅ Guardar Cambios</button>'+
+        '<button onclick="cancelAptForm()" class="btn" style="background:'+GR+';margin-top:8px">Cancelar</button>'+
         '</div></div>';
-    } else {
-      form='<button onclick="newApt()" class="btn" style="background:'+G+';margin-top:0;margin-bottom:12px">➕ Agregar Nuevo Apartamento</button>';
     }
     // ── Lista ─────────────────────────────────────────────────────────
-    var list='<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:12px">📋 Lista de Apartamentos</div>'+
+    var list='<button onclick="newApt()" class="btn" style="background:'+G+';margin-top:0;margin-bottom:12px;padding:13px">➕ Agregar Nuevo Apartamento</button>'+
+      '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:12px">📋 Lista de Apartamentos ('+S.apts.length+')</div>'+
       S.apts.map(function(a,idx){
         return'<div class="irow">'+
           '<div style="flex:1;min-width:0">'+
@@ -630,12 +634,12 @@ function tabCfg(){
           '<span class="chip" style="background:#f3f4f6;color:#9ca3af">Sin valor</span>')+
           '</div></div>'+
           '<div style="display:flex;gap:6px;flex-shrink:0">'+
-          '<button onclick="editApt('+idx+')" style="background:#eff6ff;color:'+B+';border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px;font-family:inherit">✏️ Editar</button>'+
+          '<button onclick="editApt('+idx+')" style="background:#eff6ff;color:'+B+';border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px;font-family:inherit">✏️</button>'+
           '<button onclick="delApt('+idx+')" style="background:#fff1f2;color:'+R+';border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-family:inherit;font-size:13px">🗑️</button>'+
           '</div></div>';
       }).join("")+
       '</div>';
-    return tabs+form+list;
+    return tabs+list+formOverlay;
   } else {
     // ── Trabajadores ──────────────────────────────────────────────────
     var wList='<div class="card">'+
