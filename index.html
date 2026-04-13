@@ -69,12 +69,14 @@ var DEF_APTS=[
   {name:"2505",client:"TCG",valor:0},{name:"2701",client:"TCG",valor:0}
 ];
 var DEF_WORKERS=["Maria Garcia","Juan Lopez","Ana Martinez","Pedro Rodriguez","Laura Gomez"];
+var DEF_CLIENTS=["TCG","ROMULO","ADRIANA","ALEJANDRA","ALEJA","BASELOFT","DIEGO CAMACHO","LIGIA","RUFFGO"];
 
 // ── ESTADO ────────────────────────────────────────────────────────────
 var S={
   screen:"home",
   apts:DEF_APTS.map(function(a){return{name:a.name,client:a.client,valor:Number(a.valor)||0}}),
   workers:DEF_WORKERS.slice(),
+  clients:DEF_CLIENTS.slice(),
   // operario
   who:"",apt:null,
   t:0,novs:[],emIn:[],emDan:[],emOut:[],
@@ -90,6 +92,7 @@ var S={
   dTo:new Date().toISOString().slice(0,10),
   // config
   cTab:"apts",
+  ecIdx:-1, // editar cliente idx
   // formulario apartamento — null = cerrado
   aptForm:null, // {idx, name, client, valor}
   ewIdx:-1
@@ -117,8 +120,14 @@ function loadCfg(){
     return db.collection("config").doc("trabajadores").get();
   }).then(function(d){
     if(d.exists&&d.data().list&&d.data().list.length)S.workers=d.data().list.slice();
+    return db.collection("config").doc("clientes").get();
+  }).then(function(d){
+    if(d.exists&&d.data().list&&d.data().list.length)S.clients=d.data().list.slice();
     S.screen="home";render();
   }).catch(function(){S.screen="home";render()});
+}
+function saveClients(){
+  db.collection("config").doc("clientes").set({list:S.clients.slice()}).catch(function(){});
 }
 function saveApts(cb){
   var list=S.apts.map(function(a){return{name:String(a.name),client:String(a.client),valor:Number(a.valor)||0}});
@@ -284,6 +293,39 @@ function cancelWorker(){S.ewIdx=-1;render()}
 function delWorker(idx){
   if(!confirm("¿Eliminar '"+S.workers[idx]+"'?"))return;
   S.workers.splice(idx,1);saveWorkers();render();
+}
+// Clientes
+function newClient(){
+  var el=document.getElementById("nc");
+  if(!el||!el.value.trim())return;
+  var v=el.value.trim().toUpperCase();
+  if(S.clients.indexOf(v)>=0){alert("Este cliente ya existe");return}
+  S.clients.push(v);S.clients.sort();
+  saveClients();el.value="";render();
+}
+function editClient(idx){S.ecIdx=idx;render();setTimeout(function(){var el=document.getElementById("ec");if(el){el.value=S.clients[idx];el.focus()}},100)}
+function saveClient(){
+  var el=document.getElementById("ec");
+  if(!el||!el.value.trim())return;
+  var v=el.value.trim().toUpperCase();
+  // actualizar en apartamentos también
+  var old=S.clients[S.ecIdx];
+  S.clients[S.ecIdx]=v;
+  S.apts.forEach(function(a){if(a.client===old)a.client=v});
+  S.ecIdx=-1;
+  saveClients();saveApts(function(){});
+  render();
+}
+function cancelClient(){S.ecIdx=-1;render()}
+function delClient(idx){
+  var name=S.clients[idx];
+  var used=S.apts.filter(function(a){return a.client===name}).length;
+  var msg="¿Eliminar el cliente '"+name+"'?";
+  if(used>0)msg+="\n\n⚠️ Este cliente está asignado a "+used+" apartamento(s). Quedarán sin cliente.";
+  if(!confirm(msg))return;
+  S.clients.splice(idx,1);
+  S.apts.forEach(function(a){if(a.client===name)a.client=""});
+  saveClients();saveApts(function(){});render();
 }
 function delRec(id,apt){
   if(!confirm("¿Eliminar el registro de limpieza?\n\nApartamento: "+apt+"\n\nEsta acción no se puede deshacer."))return;
@@ -634,8 +676,11 @@ function tabCfg(){
         '</div>'+
         '<label class="lbl">Nombre del Apartamento *</label>'+
         '<input id="fn" class="inp" type="text" placeholder="Ej: 1103" value="'+esc(ea.name)+'">'+
-        '<label class="lbl">Nombre del Cliente *</label>'+
-        '<input id="fc" class="inp" type="text" placeholder="Ej: TCG" value="'+esc(ea.client)+'">'+
+        '<label class="lbl">Cliente *</label>'+
+        '<select id="fc" class="inp">'+
+        '<option value="">Seleccionar cliente...</option>'+
+        S.clients.map(function(c){return'<option value="'+esc(c)+'"'+(ea.client===c?" selected":"")+'>'+esc(c)+'</option>'}).join("")+
+        '</select>'+
         '<label class="lbl">Valor del Servicio ($)</label>'+
         '<input id="fv" class="inp" type="number" inputmode="numeric" min="0" step="1000" placeholder="Ej: 50000" value="'+Number(ea.valor||0)+'">'+
         (ea.valor>0?'<div style="background:#f5f3ff;border-radius:9px;padding:10px 12px;margin-bottom:10px;text-align:center">'+
@@ -664,6 +709,35 @@ function tabCfg(){
       }).join("")+
       '</div>';
     return tabs+list+formOverlay;
+  } else if(isClients){
+    var cList='<div class="card">'+
+      '<div style="font-weight:700;font-size:14px;margin-bottom:12px">➕ Agregar Cliente</div>'+
+      '<div style="display:flex;gap:8px">'+
+      '<input id="nc" class="inp" type="text" placeholder="Ej: ROMULO" style="flex:1;margin:0;text-transform:uppercase" onkeydown="if(event.key===\'Enter\')newClient()">'+
+      '<button onclick="newClient()" style="background:'+B+';color:#fff;border:none;border-radius:9px;padding:12px 18px;font-weight:700;cursor:pointer;font-size:18px;font-family:inherit">+</button>'+
+      '</div></div>'+
+      '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:12px">🏢 Clientes Registrados</div>'+
+      S.clients.map(function(c,i){
+        var aptCount=S.apts.filter(function(a){return a.client===c}).length;
+        if(S.ecIdx===i){
+          return'<div class="irow">'+
+            '<input id="ec" class="inp" type="text" style="flex:1;margin:0;text-transform:uppercase" onkeydown="if(event.key===\'Enter\')saveClient()">'+
+            '<div style="display:flex;gap:6px;margin-left:8px">'+
+            '<button onclick="saveClient()" style="background:'+G+';color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:700;font-family:inherit">✓</button>'+
+            '<button onclick="cancelClient()" style="background:'+GR+';color:#fff;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-family:inherit">✕</button>'+
+            '</div></div>';
+        }
+        return'<div class="irow">'+
+          '<div style="flex:1">'+
+          '<div style="font-weight:700;font-size:14px">'+esc(c)+'</div>'+
+          '<div style="font-size:11px;color:#6b7280;margin-top:3px">'+aptCount+' apartamento'+(aptCount!==1?"s":"")+'</div>'+
+          '</div>'+
+          '<div style="display:flex;gap:6px">'+
+          '<button onclick="editClient('+i+')" style="background:#eff6ff;color:'+B+';border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px;font-family:inherit">✏️</button>'+
+          '<button onclick="delClient('+i+')" style="background:#fff1f2;color:'+R+';border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-family:inherit;font-size:13px">🗑️</button>'+
+          '</div></div>';
+      }).join("")+'</div>';
+    return tabs+cList;
   } else {
     // ── Trabajadores ──────────────────────────────────────────────────
     var wList='<div class="card">'+
