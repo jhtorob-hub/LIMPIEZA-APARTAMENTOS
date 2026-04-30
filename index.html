@@ -249,8 +249,8 @@ function novH(list){
 }
 function mbtns(key,c1,c2){
   return'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">'+
-    '<label style="display:flex;align-items:center;justify-content:center;gap:5px;padding:11px;background:'+c1+';color:#fff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🎥 Video<input type="file" accept="video/*" capture="environment" multiple style="display:none" onchange="readFiles(this.files,\''+key+'\')"></label>'+
-    '<label style="display:flex;align-items:center;justify-content:center;gap:5px;padding:11px;background:#fff;color:'+c2+';border:2px solid '+c2+';border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📸 Foto<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="readFiles(this.files,\''+key+'\')"></label>'+
+    '<label style="display:flex;align-items:center;justify-content:center;gap:5px;padding:11px;background:'+c1+';color:#fff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🎥 Video<input type="file" accept="video/*" multiple style="display:none" onchange="readFiles(this.files,\''+key+'\')"></label>'+
+    '<label style="display:flex;align-items:center;justify-content:center;gap:5px;padding:11px;background:#fff;color:'+c2+';border:2px solid '+c2+';border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📸 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="readFiles(this.files,\''+key+'\')"></label>'+
     '</div>';
 }
 function mediaSection(label,items){
