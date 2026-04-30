@@ -6,7 +6,6 @@
 <title>Control de Limpieza</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f3f4f6;-webkit-tap-highlight-color:transparent}
@@ -52,9 +51,9 @@ firebase.initializeApp({
   appId:"1:229695150868:web:082157b403bcef987b8001"
 });
 var db=firebase.firestore();
-var storage=firebase.storage();
 
 var PASS_ADM="admin2024",PASS_GER="jose03.22";
+var SCRIPT_URL="https://script.google.com/macros/s/AKfycbw0HeCNmXgTSmkrg67gV-x7lG9Uh2Vbc-sYHL_TLI9NgA0fweeU4-Ksb9l6cPPHtEWWrg/exec";
 var G="#16a34a",R="#dc2626",B="#2563eb",O="#d97706",PU="#7c3aed",GR="#9ca3af";
 var MONTHS=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 var COLORS=["#16a34a","#2563eb","#d97706","#dc2626","#7c3aed","#0891b2","#be185d","#b45309"];
@@ -144,27 +143,89 @@ function fetchRecs(){
   }).catch(function(){});
 }
 
-// ── STORAGE: subir archivos ───────────────────────────────────────────
-function b64toBlob(dataURL){
-  var arr=dataURL.split(",");
-  var mime=arr[0].match(/:(.*?);/)[1];
-  var bstr=atob(arr[1]);var n=bstr.length;var u8=new Uint8Array(n);
-  while(n--)u8[n]=bstr.charCodeAt(n);
-  return new Blob([u8],{type:mime});
+// ── MARCA DE AGUA ─────────────────────────────────────────────────────
+function addWatermark(dataURL, isVideo, label, cb) {
+  if (isVideo) { cb(dataURL); return; } // videos sin marca
+  var img = new Image();
+  img.onload = function() {
+    var canvas = document.createElement("canvas");
+    canvas.width = img.width; canvas.height = img.height;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    // Fondo semitransparente abajo
+    var barH = Math.max(48, img.height * 0.08);
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, img.height - barH, img.width, barH);
+    // Texto
+    var fs = Math.max(14, Math.round(img.width * 0.032));
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold " + fs + "px system-ui,sans-serif";
+    ctx.textBaseline = "middle";
+    var y = img.height - barH / 2;
+    ctx.fillText(label, 12, y);
+    cb(canvas.toDataURL("image/jpeg", 0.88));
+  };
+  img.src = dataURL;
 }
-function uploadOne(blob,path){
-  return storage.ref(path).put(blob).then(function(snap){return snap.ref.getDownloadURL()});
+
+function buildWatermarkLabel(apt, folder) {
+  var now = new Date();
+  var fecha = now.toLocaleDateString("es-CO", {day:"2-digit",month:"2-digit",year:"numeric"});
+  var hora  = now.toLocaleTimeString("es-CO", {hour:"2-digit",minute:"2-digit"});
+  var tipo  = folder==="entrada"?"ENTRADA":folder==="salida"?"SALIDA":"DAÑOS";
+  return tipo + "  " + (apt||"") + "  " + fecha + "  " + hora;
 }
-function uploadGroup(items,sid,folder){
-  if(!items.length)return Promise.resolve([]);
-  var promises=items.map(function(it,i){
-    var ext=it.isVideo?"mp4":"jpg";
-    var path="limpiezas/"+sid+"/"+folder+"_"+i+"_"+Date.now()+"."+ext;
-    return uploadOne(b64toBlob(it.url),path).then(function(url){
-      return{url:url,isVideo:it.isVideo};
+
+function getLocation() {
+  return new Promise(function(resolve) {
+    if (!navigator.geolocation) { resolve(""); return; }
+    navigator.geolocation.getCurrentPosition(
+      function(pos) { resolve(pos.coords.latitude.toFixed(5)+","+pos.coords.longitude.toFixed(5)); },
+      function() { resolve(""); },
+      {timeout:5000}
+    );
+  });
+}
+
+// ── SUBIR A GOOGLE DRIVE ──────────────────────────────────────────────
+function uploadToDrive(dataURL, name, subfolder) {
+  var parts = dataURL.split(",");
+  var mime  = parts[0].match(/:(.*?);/)[1];
+  var b64   = parts[1];
+  return fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({ base64: b64, mime: mime, name: name, subfolder: subfolder })
+  }).then(function(r){ return r.json(); }).then(function(j){
+    return j.ok ? j.url : null;
+  }).catch(function(){ return null; });
+}
+
+function saveMediaGroup(items, sid, folder, apt) {
+  if (!items.length) return Promise.resolve([]);
+  var subfolder = (apt||"limpieza").replace(/[^a-zA-Z0-9 ]/g,"").trim() + " — " + sid.slice(-6);
+  var label = buildWatermarkLabel(apt, folder);
+  var promises = items.map(function(it, i) {
+    return new Promise(function(resolve) {
+      addWatermark(it.url, it.isVideo, label, function(marked) {
+        var ext  = it.isVideo ? "mp4" : "jpg";
+        var name = folder + "_" + (i+1) + "_" + Date.now() + "." + ext;
+        uploadToDrive(marked, name, subfolder).then(function(url) {
+          // Guardar referencia en Firestore
+          var doc = { sid:sid, folder:folder, idx:i, url:url||marked, isVideo:it.isVideo, ts:firebase.firestore.Timestamp.now() };
+          db.collection("media").add(doc).then(function(){ resolve({url:url||marked,isVideo:it.isVideo}); }).catch(function(){ resolve({url:marked,isVideo:it.isVideo}); });
+        });
+      });
     });
   });
   return Promise.all(promises);
+}
+
+function loadMediaGroup(sid, folder) {
+  return db.collection("media")
+    .where("sid","==",sid).where("folder","==",folder).orderBy("idx","asc")
+    .get().then(function(snap){
+      return snap.docs.map(function(d){ return {url:d.data().url,isVideo:d.data().isVideo}; });
+    }).catch(function(){ return []; });
 }
 
 // Media helpers
@@ -241,31 +302,27 @@ function finalizarLimpieza(){
   var total=(S.emIn.length+S.emDan.length+S.emOut.length)||1;
   var done=0;
   function prog(){done++;S.uploadPct=Math.round(done/total*100);var el=document.getElementById("ubar");if(el)el.style.width=S.uploadPct+"%"}
-  // Subir en paralelo
   Promise.all([
-    uploadGroup(S.emIn,sid,"entrada").then(function(r){prog();return r}),
-    uploadGroup(S.emDan,sid,"danos").then(function(r){prog();return r}),
-    uploadGroup(S.emOut,sid,"salida").then(function(r){prog();return r})
-  ]).then(function(results){
-    var entryMedia=results[0],danosMedia=results[1],exitMedia=results[2];
+    saveMediaGroup(S.emIn,sid,"entrada",aptL(S.apt)),
+    saveMediaGroup(S.emDan,sid,"danos",aptL(S.apt)),
+    saveMediaGroup(S.emOut,sid,"salida",aptL(S.apt))
+  ]).then(function(){
     return db.collection("limpiezas").doc(sid).update({
       status:"completed",
       endTime:firebase.firestore.Timestamp.fromDate(end),
       duration:S.t,novedades:S.novs,
-      entryCount:S.emIn.length,danosCount:S.emDan.length,exitCount:S.emOut.length,
-      entryMedia:entryMedia,danosMedia:danosMedia,exitMedia:exitMedia
+      entryCount:S.emIn.length,danosCount:S.emDan.length,exitCount:S.emOut.length
     });
   }).then(function(){
     S.uploading=false;S.uploadPct=100;render();
   }).catch(function(e){
-    // Si falla el storage, al menos guardar datos básicos
     db.collection("limpiezas").doc(sid).update({
       status:"completed",endTime:firebase.firestore.Timestamp.fromDate(end),
       duration:S.t,novedades:S.novs,
       entryCount:S.emIn.length,danosCount:S.emDan.length,exitCount:S.emOut.length
-    });
+    }).catch(function(){});
     S.uploading=false;render();
-    console.log("Storage error:",e);
+    console.log("Error guardando media:",e);
   });
 }
 
@@ -337,7 +394,21 @@ function delRec(id,apt){
 
 function verDetalle(id){
   var r=S.recs.find(function(x){return x.id===id});
-  if(r){S.detalle=r;S.screen="detalle";render()}
+  if(!r)return;
+  S.detalle=r;S.screen="detalle";
+  S.detalleMedia={entry:[],danos:[],out:[],loading:true};
+  render();
+  Promise.all([
+    loadMediaGroup(id,"entrada"),
+    loadMediaGroup(id,"danos"),
+    loadMediaGroup(id,"salida")
+  ]).then(function(res){
+    S.detalleMedia={entry:res[0],danos:res[1],out:res[2],loading:false};
+    render();
+  }).catch(function(){
+    S.detalleMedia={entry:[],danos:[],out:[],loading:false};
+    render();
+  });
 }
 
 // Render
