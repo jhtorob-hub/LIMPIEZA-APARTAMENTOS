@@ -554,31 +554,37 @@ function App(){
   const [toast,setToast]=useState(null);
   const saveTimer=useRef(null);
 
-  // Cargar datos desde Firestore al iniciar
+  const isRemoteUpdate = useRef(false);
+
+  // Escucha en tiempo real — cualquier cambio en Firebase se refleja en todos los dispositivos
   useEffect(()=>{
-    DOC_REF.get().then(doc=>{
+    const unsub = DOC_REF.onSnapshot(doc=>{
       if(doc.exists){
+        isRemoteUpdate.current = true;
         setAppData(doc.data().state);
+        setLoading(false);
       } else {
         const initial={apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS};
         DOC_REF.set({state:initial});
         setAppData(initial);
+        setLoading(false);
       }
-      setLoading(false);
-    }).catch(()=>{
+    }, err=>{
+      console.error("Error Firebase:",err);
       setAppData({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS});
       setLoading(false);
     });
+    return ()=>unsub();
   },[]);
 
-  // Guardar en Firestore con debounce de 800ms
+  // Guardar en Firestore solo cuando el cambio viene del usuario (no de Firebase)
   useEffect(()=>{
     if(!appData) return;
+    if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(()=>{
       DOC_REF.set({state:appData})
-        .then(()=>{ window._lastSaved=Date.now(); })
-        .catch(e=>{ console.error("Error guardando:",e); alert("⚠️ Error al guardar en Firebase. Revisa tu conexión."); });
+        .catch(e=>{ console.error("Error guardando:",e); alert("⚠️ Error al guardar. Revisa tu conexión."); });
     },600);
   },[appData]);
 
