@@ -279,12 +279,63 @@ function DashboardTab({appData}){
   );
 }
 
+function EditModal({cleaning,appData,onSave,onClose}){
+  const [form,setForm]=useState({...cleaning});
+  const sorted=[...appData.apartments].sort((a,b)=>a.displayName.localeCompare(b.displayName));
+  const buildingGroups=[...new Set(sorted.map(a=>a.building))];
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const handleApt=(aptId)=>{
+    const apt=appData.apartments.find(a=>a.id===aptId);
+    if(apt) set("apartmentId",aptId),set("apartmentName",apt.displayName),set("clientName",apt.clientName||""),set("amount",apt.price||0);
+  };
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:24,width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{margin:0,fontSize:17,fontWeight:800}}>✏️ Editar registro</h3>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:20,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{marginBottom:14}}><Lbl>Fecha</Lbl><Inp type="date" value={form.date||""} onChange={v=>set("date",v)}/></div>
+        <div style={{marginBottom:14}}><Lbl>Encargado</Lbl>
+          <select value={form.employeeName||""} onChange={e=>set("employeeName",e.target.value)} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}>
+            <option value="">-- Selecciona --</option>
+            {appData.employees.map(e=><option key={e} value={e}>{e}</option>)}
+          </select>
+        </div>
+        <div style={{marginBottom:14}}><Lbl>Apartamento</Lbl>
+          <select value={form.apartmentId||""} onChange={e=>handleApt(e.target.value)} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}>
+            <option value="">-- Selecciona --</option>
+            {buildingGroups.map(b=><optgroup key={b} label={`📍 ${b}`}>{sorted.filter(a=>a.building===b).map(a=><option key={a.id} value={a.id}>{a.displayName}{a.clientName?` — ${a.clientName}`:""}</option>)}</optgroup>)}
+          </select>
+        </div>
+        <div style={{marginBottom:14}}><Lbl>Cliente</Lbl><Inp value={form.clientName||""} onChange={v=>set("clientName",v)} placeholder="Cliente"/></div>
+        <div style={{marginBottom:14}}><Lbl>Valor (COP)</Lbl><Inp type="number" value={form.amount||""} onChange={v=>set("amount",parseInt(v)||0)} placeholder="50000"/></div>
+        <div style={{marginBottom:14}}><Lbl>Observaciones</Lbl>
+          <textarea value={form.notes||""} onChange={e=>set("notes",e.target.value)} rows={3} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+        </div>
+        <div style={{marginBottom:20}}><Lbl>Estado de pago</Lbl>
+          <div style={{display:"flex",background:C.bg,borderRadius:8,padding:4}}>
+            {[["false","⏳ Pendiente"],["true","✓ Pagado"]].map(([val,label])=>(
+              <button key={val} onClick={()=>set("paid",val==="true")} style={{flex:1,padding:"9px",border:"none",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit",transition:"all 0.15s",background:String(form.paid)===val?C.accent:"transparent",color:String(form.paid)===val?"#0b0f18":C.muted}}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <Btn variant="ghost" onClick={onClose} style={{flex:1}}>Cancelar</Btn>
+          <Btn onClick={()=>onSave(form)} style={{flex:1}}>💾 Guardar</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CleaningsTab({appData,update,showToast}){
   const [fDate,setFDate]=useState("");
   const [fEmp,setFEmp]=useState("");
   const [fApt,setFApt]=useState("");
   const [fClient,setFClient]=useState("");
   const [fPaid,setFPaid]=useState("all");
+  const [editing,setEditing]=useState(null);
   const filtered=appData.cleanings.filter(c=>{
     if(fDate&&c.date!==fDate) return false;
     if(fEmp&&!c.employeeName?.toLowerCase().includes(fEmp.toLowerCase())) return false;
@@ -296,10 +347,12 @@ function CleaningsTab({appData,update,showToast}){
   }).sort((a,b)=>b.date!==a.date?b.date?.localeCompare(a.date):b.createdAt-a.createdAt);
   const togglePaid=(id)=>{const found=appData.cleanings.find(c=>c.id===id);update("cleanings",appData.cleanings.map(c=>c.id===id?{...c,paid:!c.paid}:c));showToast(found?.paid?"Marcado como pendiente":"Marcado como pagado ✅");};
   const del=(id)=>{if(!window.confirm("¿Eliminar este registro?"))return;update("cleanings",appData.cleanings.filter(c=>c.id!==id));showToast("Registro eliminado","error");};
+  const saveEdit=(form)=>{update("cleanings",appData.cleanings.map(c=>c.id===form.id?{...form}:c));setEditing(null);showToast("Registro actualizado ✅");};
   const total=filtered.reduce((s,c)=>s+(c.amount||0),0);
   const totalPaid=filtered.filter(c=>c.paid).reduce((s,c)=>s+(c.amount||0),0);
   return(
     <div>
+      {editing&&<EditModal cleaning={editing} appData={appData} onSave={saveEdit} onClose={()=>setEditing(null)}/>}
       <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Todos los registros</h2>
       <Card style={{marginBottom:20}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
@@ -333,7 +386,11 @@ function CleaningsTab({appData,update,showToast}){
                   <td style={{padding:"12px 16px",color:C.muted,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes||"—"}</td>
                   <td style={{padding:"12px 16px",color:C.accent,fontWeight:800,whiteSpace:"nowrap"}}>{fmtCOP(c.amount)}</td>
                   <td style={{padding:"12px 16px"}}><Badge paid={c.paid}/></td>
-                  <td style={{padding:"12px 16px"}}><div style={{display:"flex",gap:6}}><Btn variant={c.paid?"ghost":"success"} size="sm" onClick={()=>togglePaid(c.id)}>{c.paid?"↩":"✓ Pagar"}</Btn><Btn variant="danger" size="sm" onClick={()=>del(c.id)}>✕</Btn></div></td>
+                  <td style={{padding:"12px 16px"}}><div style={{display:"flex",gap:6}}>
+                    <Btn variant="info" size="sm" onClick={()=>setEditing(c)}>✏️</Btn>
+                    <Btn variant={c.paid?"ghost":"success"} size="sm" onClick={()=>togglePaid(c.id)}>{c.paid?"↩":"✓"}</Btn>
+                    <Btn variant="danger" size="sm" onClick={()=>del(c.id)}>✕</Btn>
+                  </div></td>
                 </tr>
               ))}
             </tbody>
