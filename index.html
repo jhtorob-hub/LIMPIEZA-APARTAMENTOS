@@ -19,14 +19,14 @@
 const { useState, useEffect, useRef } = React;
 
 // Firebase init
-firebase.initializeApp({
+if (!firebase.apps.length) { firebase.initializeApp({
   apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
   authDomain: "lavanderia-limpieza.firebaseapp.com",
   projectId: "lavanderia-limpieza",
   storageBucket: "lavanderia-limpieza.firebasestorage.app",
   messagingSenderId: "229695150868",
   appId: "1:229695150868:web:082157b403bcef987b8001"
-});
+}); }
 const db = firebase.firestore();
 const DOC_REF = db.collection("app_data").doc("main");
 
@@ -426,29 +426,48 @@ function ConfigTab({appData,update,showToast}){
   const [newEmp,setNewEmp]=useState("");
   const [newAdminPw,setNewAdminPw]=useState("");
   const [newEmpPw,setNewEmpPw]=useState("");
+  // Local editable copy of apartments
+  const [localApts,setLocalApts]=useState(()=>appData.apartments);
+  const [aptsDirty,setAptsDirty]=useState(false);
+  useEffect(()=>{ setLocalApts(appData.apartments); },[appData.apartments.length]);
   const buildings=[...new Set(appData.apartments.map(a=>a.building).filter(Boolean))].sort();
   const clients=[...new Set(appData.apartments.map(a=>a.clientName).filter(Boolean))].sort();
   const addApt=()=>{
     if(!nBuilding.trim()){showToast("El edificio es requerido","error");return;}
     const num=nAptNum.trim(),bld=nBuilding.trim();
     const displayName=num?`${num} ${bld}`:bld;
-    update("apartments",[...appData.apartments,{id:uid(),aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:parseInt(nPrice)||0}]);
+    const newApt={id:uid(),aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:parseInt(nPrice)||0};
+    const updated=[...localApts,newApt];
+    setLocalApts(updated);
+    update("apartments",updated);
     setNAptNum("");setNBuilding("");setNClient("");setNPrice("");
     showToast(`${displayName} agregado ✅`);
   };
-  const delApt=(id)=>{update("apartments",appData.apartments.filter(a=>a.id!==id));showToast("Apartamento eliminado","error");};
-  const updAptField=(id,field,val)=>{
-    update("apartments",appData.apartments.map(a=>{
+  const delApt=(id)=>{
+    const updated=localApts.filter(a=>a.id!==id);
+    setLocalApts(updated);
+    update("apartments",updated);
+    showToast("Apartamento eliminado","error");
+  };
+  const updLocalApt=(id,field,val)=>{
+    setLocalApts(prev=>prev.map(a=>{
       if(a.id!==id) return a;
-      const u={...a,[field]:field==="price"?parseInt(val)||0:val};
+      const u={...a,[field]:field==="price"?val:val};
       u.displayName=u.aptNumber?`${u.aptNumber} ${u.building}`:u.building;
       return u;
     }));
+    setAptsDirty(true);
+  };
+  const saveApts=()=>{
+    const normalized=localApts.map(a=>({...a,price:parseInt(a.price)||0}));
+    update("apartments",normalized);
+    setAptsDirty(false);
+    showToast("Apartamentos guardados ✅");
   };
   const addEmp=()=>{if(!newEmp.trim())return;update("employees",[...appData.employees,newEmp.trim().toUpperCase()]);setNewEmp("");showToast("Encargado agregado ✅");};
   const delEmp=(name)=>{update("employees",appData.employees.filter(e=>e!==name));showToast("Eliminado","error");};
   const savePws=()=>{const s={...appData.settings};if(newAdminPw)s.adminPassword=newAdminPw;if(newEmpPw)s.empPassword=newEmpPw;update("settings",s);setNewAdminPw("");setNewEmpPw("");showToast("Contraseñas guardadas ✅");};
-  const filteredApts=appData.apartments.filter(a=>a.displayName.toLowerCase().includes(aptSearch.toLowerCase())||a.clientName?.toLowerCase().includes(aptSearch.toLowerCase())).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+  const filteredApts=localApts.filter(a=>a.displayName.toLowerCase().includes(aptSearch.toLowerCase())||a.clientName?.toLowerCase().includes(aptSearch.toLowerCase())).sort((a,b)=>a.displayName.localeCompare(b.displayName));
   const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
   return(
     <div>
@@ -472,7 +491,10 @@ function ConfigTab({appData,update,showToast}){
             </div>
             <Btn onClick={addApt} style={{width:"100%"}}>+ Agregar</Btn>
           </Card>
-          <div style={{marginBottom:12}}><Inp value={aptSearch} onChange={setAptSearch} placeholder="🔍 Buscar..."/></div>
+          <div style={{display:"flex",gap:10,marginBottom:12,alignItems:"center"}}>
+            <div style={{flex:1}}><Inp value={aptSearch} onChange={setAptSearch} placeholder="🔍 Buscar apartamento o cliente..."/></div>
+            {aptsDirty&&<Btn variant="success" onClick={saveApts}>💾 Guardar cambios</Btn>}
+          </div>
           <Card style={{padding:0,overflow:"hidden"}}>
             <div style={{maxHeight:460,overflowY:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -481,9 +503,9 @@ function ConfigTab({appData,update,showToast}){
                   {filteredApts.map(a=>(
                     <tr key={a.id} style={{borderTop:`1px solid ${C.border}`}}>
                       <td style={{padding:"10px 16px",fontWeight:700}}>{a.displayName}</td>
-                      <td style={{padding:"10px 16px"}}><input value={a.building||""} onChange={e=>updAptField(a.id,"building",e.target.value)} style={{width:110,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/></td>
-                      <td style={{padding:"10px 16px"}}><input value={a.clientName||""} onChange={e=>updAptField(a.id,"clientName",e.target.value)} style={{width:100,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.info,fontSize:12,fontFamily:"inherit",outline:"none",fontWeight:600}}/></td>
-                      <td style={{padding:"10px 16px"}}><input type="number" value={a.price} onChange={e=>updAptField(a.id,"price",e.target.value)} style={{width:90,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.accent,fontSize:12,fontWeight:800,fontFamily:"inherit",outline:"none"}}/></td>
+                      <td style={{padding:"10px 16px"}}><input value={a.building||""} onChange={e=>updLocalApt(a.id,"building",e.target.value)} style={{width:110,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/></td>
+                      <td style={{padding:"10px 16px"}}><input value={a.clientName||""} onChange={e=>updLocalApt(a.id,"clientName",e.target.value)} style={{width:100,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.info,fontSize:12,fontFamily:"inherit",outline:"none",fontWeight:600}}/></td>
+                      <td style={{padding:"10px 16px"}}><input type="number" value={a.price} onChange={e=>updLocalApt(a.id,"price",e.target.value)} style={{width:90,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.accent,fontSize:12,fontWeight:800,fontFamily:"inherit",outline:"none"}}/></td>
                       <td style={{padding:"10px 16px",textAlign:"right"}}><Btn variant="danger" size="sm" onClick={()=>delApt(a.id)}>✕</Btn></td>
                     </tr>
                   ))}
@@ -554,8 +576,10 @@ function App(){
     if(!appData) return;
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(()=>{
-      DOC_REF.set({state:appData}).catch(e=>console.error("Error guardando:",e));
-    },800);
+      DOC_REF.set({state:appData})
+        .then(()=>{ window._lastSaved=Date.now(); })
+        .catch(e=>{ console.error("Error guardando:",e); alert("⚠️ Error al guardar en Firebase. Revisa tu conexión."); });
+    },600);
   },[appData]);
 
   const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),3200);};
