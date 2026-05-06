@@ -7,13 +7,28 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <style>*{box-sizing:border-box;}body{margin:0;padding:0;background:#0b0f18;color:#dce8f4;font-family:'DM Sans',system-ui,sans-serif;}select option{background:#0b0f18;}optgroup{background:#0b0f18;font-style:normal;font-weight:700;}</style>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet"/>
+
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
+
+// Firebase init
+firebase.initializeApp({
+  apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
+  authDomain: "lavanderia-limpieza.firebaseapp.com",
+  projectId: "lavanderia-limpieza",
+  storageBucket: "lavanderia-limpieza.firebasestorage.app",
+  messagingSenderId: "229695150868",
+  appId: "1:229695150868:web:082157b403bcef987b8001"
+});
+const db = firebase.firestore();
+const DOC_REF = db.collection("app_data").doc("main");
 
 const DEFAULT_APARTMENTS = [
   { id:"a1",  aptNumber:"201",       building:"TCG",        displayName:"201 TCG",           clientName:"TCG",          price:55425  },
@@ -61,18 +76,13 @@ const DEFAULT_APARTMENTS = [
   { id:"a43", aptNumber:"Ciudadela", building:"Sevilla",    displayName:"Ciudadela Sevilla", clientName:"Romulo",       price:110000 },
   { id:"a44", aptNumber:"",          building:"Belen",      displayName:"Belen",             clientName:"Alejandra",    price:50000  },
 ];
-
 const DEFAULT_EMPLOYEES = ["AMADALITH","ARIANNY","YAZMINA","NUBIA","YESSICA","ALEJANDRO","JESSICA","CAMILO","JOSE","DEISY","ALEJANDRA"];
-const DEFAULT_SETTINGS  = { adminPassword:"jose03.22", empPassword:"123" };
-const STORAGE_KEY       = "cleaning_app_v5";
+const DEFAULT_SETTINGS  = { adminPassword:"jose03.22", empPassword:"lavanderia123" };
 
 const fmtCOP   = (n) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n||0);
 const todayStr = () => new Date().toISOString().split("T")[0];
 const fmtDate  = (d) => { if(!d) return ""; const [y,m,day]=d.split("-"); return `${day}/${m}/${y}`; };
 const uid      = () => Math.random().toString(36).slice(2,9);
-
-function loadData(){ try{ const r=localStorage.getItem(STORAGE_KEY); if(r) return JSON.parse(r); }catch(e){} return null; }
-function saveData(data){ try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(data)); }catch(e){} }
 
 const C={bg:"#0b0f18",surface:"#141920",card:"#1a2130",border:"#252d3d",accent:"#f0b429",text:"#dce8f4",muted:"#6b7a99",success:"#22c55e",danger:"#ef4444",info:"#3b82f6"};
 
@@ -171,25 +181,17 @@ function EmployeeView({appData,update,showToast,onLogout}){
         <Btn onClick={handleSubmit} style={{width:"100%",padding:"14px",fontSize:15}}>✓ Registrar limpieza</Btn>
       </Card>
       <div style={{marginBottom:20}}>
-        <button onClick={()=>setShowNewApt(!showNewApt)} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.border}`,borderRadius:10,color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600,transition:"all 0.15s"}}>
+        <button onClick={()=>setShowNewApt(!showNewApt)} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.border}`,borderRadius:10,color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
           {showNewApt?"✕ Cancelar":"➕ Agregar apartamento nuevo"}
         </button>
         {showNewApt&&(
           <Card style={{marginTop:10}}>
-            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:700,color:C.text}}>Nuevo apartamento</h3>
-            <div style={{marginBottom:12}}><Lbl>Número de apto</Lbl><Inp value={nAptNum} onChange={setNAptNum} placeholder="Ej: 303, 1203"/></div>
-            <div style={{marginBottom:12}}>
-              <Lbl>Edificio / Ubicación *</Lbl>
-              <input list="emp-blist" value={nBuilding} onChange={e=>setNBuilding(e.target.value)} placeholder="Ej: Monserrate, Bloom, Aiana" style={inpStyle}/>
-              <datalist id="emp-blist">{buildings.map(b=><option key={b} value={b}/>)}</datalist>
-            </div>
-            <div style={{marginBottom:16}}>
-              <Lbl>Cliente / Propietario</Lbl>
-              <input list="emp-clist" value={nClient} onChange={e=>setNClient(e.target.value)} placeholder="Ej: Veronica, TCG" style={inpStyle}/>
-              <datalist id="emp-clist">{clients.map(cl=><option key={cl} value={cl}/>)}</datalist>
-            </div>
+            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:700}}>Nuevo apartamento</h3>
+            <div style={{marginBottom:12}}><Lbl>Número de apto</Lbl><Inp value={nAptNum} onChange={setNAptNum} placeholder="Ej: 303"/></div>
+            <div style={{marginBottom:12}}><Lbl>Edificio *</Lbl><input list="emp-blist" value={nBuilding} onChange={e=>setNBuilding(e.target.value)} placeholder="Ej: Monserrate" style={inpStyle}/><datalist id="emp-blist">{buildings.map(b=><option key={b} value={b}/>)}</datalist></div>
+            <div style={{marginBottom:16}}><Lbl>Cliente</Lbl><input list="emp-clist" value={nClient} onChange={e=>setNClient(e.target.value)} placeholder="Ej: Veronica" style={inpStyle}/><datalist id="emp-clist">{clients.map(cl=><option key={cl} value={cl}/>)}</datalist></div>
             <div style={{fontSize:11,color:C.muted,marginBottom:12}}>* El precio lo define el admin después.</div>
-            <Btn onClick={handleAddApt} style={{width:"100%"}}>+ Agregar apartamento</Btn>
+            <Btn onClick={handleAddApt} style={{width:"100%"}}>+ Agregar</Btn>
           </Card>
         )}
       </div>
@@ -528,14 +530,33 @@ function App(){
   const [loginError,setLoginError]=useState("");
   const [adminTab,setAdminTab]=useState("dashboard");
   const [toast,setToast]=useState(null);
+  const saveTimer=useRef(null);
 
+  // Cargar datos desde Firestore al iniciar
   useEffect(()=>{
-    const saved=loadData();
-    setAppData(saved||{apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS});
-    setLoading(false);
+    DOC_REF.get().then(doc=>{
+      if(doc.exists){
+        setAppData(doc.data().state);
+      } else {
+        const initial={apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS};
+        DOC_REF.set({state:initial});
+        setAppData(initial);
+      }
+      setLoading(false);
+    }).catch(()=>{
+      setAppData({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS});
+      setLoading(false);
+    });
   },[]);
 
-  useEffect(()=>{if(appData) saveData(appData);},[appData]);
+  // Guardar en Firestore con debounce de 800ms
+  useEffect(()=>{
+    if(!appData) return;
+    if(saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{
+      DOC_REF.set({state:appData}).catch(e=>console.error("Error guardando:",e));
+    },800);
+  },[appData]);
 
   const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),3200);};
   const update=(key,val)=>setAppData(prev=>({...prev,[key]:val}));
@@ -546,7 +567,12 @@ function App(){
     else setLoginError("Contraseña incorrecta ❌");
   };
 
-  if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#6b7a99"}}>Cargando...</div>;
+  if(loading) return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",color:C.muted,gap:16}}>
+      <div style={{fontSize:40}}>🧹</div>
+      <div style={{fontSize:14}}>Conectando con Firebase...</div>
+    </div>
+  );
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans',system-ui,sans-serif"}}>
