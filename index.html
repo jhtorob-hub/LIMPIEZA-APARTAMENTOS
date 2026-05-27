@@ -207,6 +207,49 @@ function EmployeeView({appData,update,showToast,onLogout}){
           ))}
         </div>
       )}
+
+      {/* Historial de limpiezas por fecha */}
+      <CleaningHistoryEmployee cleanings={appData.cleanings}/>
+    </div>
+  );
+}
+
+function CleaningHistoryEmployee({cleanings}){
+  const [filterDate,setFilterDate]=useState(todayStr());
+  const filtered=cleanings
+    .filter(c=>!filterDate||c.date===filterDate)
+    .sort((a,b)=>b.createdAt-a.createdAt);
+  return(
+    <div style={{marginTop:8}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+          <span style={{fontWeight:700,fontSize:14}}>📋 Limpiezas registradas</span>
+          <span style={{fontSize:12,color:C.muted}}>{filtered.length} resultado{filtered.length!==1?"s":""}</span>
+        </div>
+        <div style={{marginBottom:14}}>
+          <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)}
+            style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:"#dce8f4",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+        </div>
+        {filtered.length===0
+          ?<div style={{textAlign:"center",padding:24,color:C.muted,fontSize:13}}>No hay limpiezas para esta fecha</div>
+          :filtered.map(c=>(
+            <div key={c.id} style={{padding:"12px",marginBottom:8,background:"#0b0f18",borderRadius:8,border:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14}}>{c.apartmentName}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:3}}>
+                    {c.clientName&&<span style={{color:"#3b82f6",fontWeight:600}}>{c.clientName} · </span>}
+                    <span>{c.employeeName}</span>
+                    {c.time&&<span> · {c.time}</span>}
+                  </div>
+                  {c.notes&&<div style={{fontSize:12,color:C.muted,marginTop:4,fontStyle:"italic"}}>"{c.notes}"</div>}
+                </div>
+                <div style={{fontSize:11,color:C.muted,whiteSpace:"nowrap"}}>{fmtDate(c.date)}</div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
     </div>
   );
 }
