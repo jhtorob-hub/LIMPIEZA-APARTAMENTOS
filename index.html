@@ -214,11 +214,109 @@ function EmployeeView({appData,update,showToast,onLogout}){
   );
 }
 
+function BackupSection({appData,update,showToast}){
+  const firstDay=todayStr().slice(0,8)+"01";
+  const [dateFrom,setDateFrom]=useState(firstDay);
+  const [dateTo,setDateTo]=useState(todayStr());
+  const fileRef=React.useRef(null);
+  const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+
+  const toCSV=(rows,headers)=>{
+    const esc=(v)=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+    return[headers.map(esc).join(","),...rows.map(r=>headers.map(h=>esc(r[h])).join(","))].join("\n");
+  };
+
+  const downloadExcel=()=>{
+    const filtered=appData.cleanings.filter(c=>{
+      if(dateFrom&&c.date<dateFrom)return false;
+      if(dateTo&&c.date>dateTo)return false;
+      return true;
+    }).sort((a,b)=>a.date?.localeCompare(b.date)||a.createdAt-b.createdAt);
+    if(filtered.length===0){showToast("No hay registros en ese rango","error");return;}
+
+    const headers=["Fecha","Hora","Encargado","Apartamento","Cliente","Observaciones","Valor","Pagado"];
+    const rows=filtered.map(c=>({"Fecha":fmtDate(c.date),"Hora":c.time||"","Encargado":c.employeeName||"","Apartamento":c.apartmentName||"","Cliente":c.clientName||"","Observaciones":c.notes||"","Valor":c.amount||0,"Pagado":c.paid?"Sí":"No"}));
+
+    const byEmp={};
+    filtered.forEach(c=>{if(!byEmp[c.employeeName])byEmp[c.employeeName]={limpiezas:0,total:0,pagado:0,pendiente:0};byEmp[c.employeeName].limpiezas++;byEmp[c.employeeName].total+=c.amount||0;if(c.paid)byEmp[c.employeeName].pagado+=c.amount||0;else byEmp[c.employeeName].pendiente+=c.amount||0;});
+    const empRows=Object.entries(byEmp).map(([n,d])=>({"Encargado":n,"Limpiezas":d.limpiezas,"Total":d.total,"Pagado":d.pagado,"Pendiente":d.pendiente}));
+
+    const byClient={};
+    filtered.forEach(c=>{const k=c.clientName||"Sin cliente";if(!byClient[k])byClient[k]={limpiezas:0,total:0,pagado:0,pendiente:0};byClient[k].limpiezas++;byClient[k].total+=c.amount||0;if(c.paid)byClient[k].pagado+=c.amount||0;else byClient[k].pendiente+=c.amount||0;});
+    const clientRows=Object.entries(byClient).map(([n,d])=>({"Cliente":n,"Limpiezas":d.limpiezas,"Total":d.total,"Pagado":d.pagado,"Pendiente":d.pendiente}));
+
+    const sep="\n\n";
+    const csv="\uFEFF"+"REGISTROS DE LIMPIEZAS\n"+toCSV(rows,headers)+sep+"RESUMEN POR ENCARGADO\n"+toCSV(empRows,["Encargado","Limpiezas","Total","Pagado","Pendiente"])+sep+"RESUMEN POR CLIENTE\n"+toCSV(clientRows,["Cliente","Limpiezas","Total","Pagado","Pendiente"]);
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=`limpiezas-${dateFrom}-al-${dateTo}.csv`;a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Excel descargado — ${filtered.length} registros ✅`);
+  };
+
+  const downloadJson=()=>{
+    const blob=new Blob([JSON.stringify(appData,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`backup-${todayStr()}.json`;a.click();
+    URL.revokeObjectURL(url);showToast("Backup completo descargado ✅");
+  };
+
+  const uploadBackup=(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      try{
+        const p=JSON.parse(ev.target.result);
+        if(!p.apartments||!p.cleanings||!p.employees||!p.settings){showToast("Archivo inválido","error");return;}
+        if(!window.confirm("¿Restaurar este backup? Se reemplazarán todos los datos actuales."))return;
+        update("apartments",p.apartments);update("cleanings",p.cleanings);update("employees",p.employees);update("settings",p.settings);
+        showToast("Backup restaurado ✅");
+      }catch(err){showToast("Error al leer el archivo","error");}
+    };
+    reader.readAsText(file);e.target.value="";
+  };
+
+  const count=appData.cleanings.filter(c=>(!dateFrom||c.date>=dateFrom)&&(!dateTo||c.date<=dateTo)).length;
+
+  return(
+    <div style={{maxWidth:560}}>
+      <h3 style={{margin:"0 0 20px",fontSize:17,fontWeight:800}}>💾 Backup y exportación</h3>
+      <Card style={{marginBottom:16}}>
+        <h4 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:C.accent}}>📊 Exportar a Excel</h4>
+        <p style={{margin:"0 0 16px",fontSize:13,color:C.muted,lineHeight:1.5}}>Exporta los registros en formato CSV (compatible con Excel y Google Sheets). Filtra por rango de fechas. Incluye registros, resumen por encargado y resumen por cliente.</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+          <div><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Desde</div><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={inpStyle}/></div>
+          <div><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Hasta</div><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={inpStyle}/></div>
+        </div>
+        <button onClick={downloadExcel} style={{width:"100%",padding:"13px",background:"#14532d",border:`1px solid ${C.success}`,borderRadius:8,color:C.success,cursor:"pointer",fontFamily:"inherit",fontSize:14,fontWeight:700}}>
+          ⬇️ Descargar Excel ({count} registros)
+        </button>
+      </Card>
+      <Card>
+        <h4 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:C.info}}>🗄️ Backup completo</h4>
+        <p style={{margin:"0 0 16px",fontSize:13,color:C.muted,lineHeight:1.5}}>Descarga o restaura un backup de todos los datos: apartamentos, encargados, configuración y registros históricos.</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button onClick={downloadJson} style={{padding:"12px",background:"#1e3a5f",border:`1px solid ${C.info}`,borderRadius:8,color:C.info,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>⬇️ Descargar backup</button>
+          <button onClick={()=>fileRef.current.click()} style={{padding:"12px",background:"#450a0a",border:`1px solid ${C.danger}`,borderRadius:8,color:C.danger,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>⬆️ Restaurar backup</button>
+        </div>
+        <input ref={fileRef} type="file" accept=".json" onChange={uploadBackup} style={{display:"none"}}/>
+        <div style={{marginTop:12,padding:"10px 12px",background:"#0b0f18",borderRadius:8,fontSize:11,color:C.muted}}>⚠️ Al restaurar se reemplazarán <strong style={{color:C.text}}>todos los datos actuales</strong>.</div>
+      </Card>
+    </div>
+  );
+}
+
 function CleaningHistoryEmployee({cleanings}){
-  const [filterDate,setFilterDate]=useState(todayStr());
+  const [dateFrom,setDateFrom]=useState(todayStr());
+  const [dateTo,setDateTo]=useState(todayStr());
   const filtered=cleanings
-    .filter(c=>!filterDate||c.date===filterDate)
-    .sort((a,b)=>b.createdAt-a.createdAt);
+    .filter(c=>{
+      if(dateFrom&&c.date<dateFrom) return false;
+      if(dateTo&&c.date>dateTo) return false;
+      return true;
+    })
+    .sort((a,b)=>b.date!==a.date?b.date?.localeCompare(a.date):b.createdAt-a.createdAt);
   return(
     <div style={{marginTop:8}}>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:16}}>
@@ -226,12 +324,20 @@ function CleaningHistoryEmployee({cleanings}){
           <span style={{fontWeight:700,fontSize:14}}>📋 Limpiezas registradas</span>
           <span style={{fontSize:12,color:C.muted}}>{filtered.length} resultado{filtered.length!==1?"s":""}</span>
         </div>
-        <div style={{marginBottom:14}}>
-          <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)}
-            style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:"#dce8f4",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Desde</div>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+              style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:"#dce8f4",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Hasta</div>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+              style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:"#dce8f4",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
         </div>
         {filtered.length===0
-          ?<div style={{textAlign:"center",padding:24,color:C.muted,fontSize:13}}>No hay limpiezas para esta fecha</div>
+          ?<div style={{textAlign:"center",padding:24,color:C.muted,fontSize:13}}>No hay limpiezas en este rango de fechas</div>
           :filtered.map(c=>(
             <div key={c.id} style={{padding:"12px",marginBottom:8,background:"#0b0f18",borderRadius:8,border:`1px solid ${C.border}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -573,7 +679,7 @@ function ConfigTab({appData,update,showToast}){
     <div>
       <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Configuración</h2>
       <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-        {[["apartments","🏠 Apartamentos"],["employees","👤 Encargados"],["passwords","🔐 Contraseñas"]].map(([id,label])=>(
+        {[["apartments","🏠 Apartamentos"],["employees","👤 Encargados"],["passwords","🔐 Contraseñas"],["backup","💾 Backup"]].map(([id,label])=>(
           <Btn key={id} variant={sec===id?"primary":"ghost"} onClick={()=>setSec(id)}>{label}</Btn>
         ))}
       </div>
@@ -639,6 +745,7 @@ function ConfigTab({appData,update,showToast}){
           </div>
         </Card>
       )}
+      {sec==="backup"&&<BackupSection appData={appData} update={update} showToast={showToast}/>}
     </div>
   );
 }
