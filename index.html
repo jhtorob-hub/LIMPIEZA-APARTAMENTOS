@@ -1,862 +1,924 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Control de Limpieza</title>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#f3f4f6;-webkit-tap-highlight-color:transparent}
-.wrap{max-width:500px;margin:0 auto;padding:16px;min-height:100vh;padding-bottom:60px}
-.card{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.btn{width:100%;padding:13px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit}
-.inp{width:100%;padding:12px;border-radius:9px;border:1.5px solid #d1d5db;font-size:15px;font-family:inherit;outline:none;background:#fff;margin-bottom:10px}
-.inp:focus{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.lbl{font-size:11px;color:#6b7280;font-weight:700;letter-spacing:.06em;margin-bottom:5px;display:block;text-transform:uppercase}
-.row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6}
-.chip{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
-.sbox{background:#fff;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.irow{display:flex;align-items:flex-start;gap:10px;padding:12px;background:#f9fafb;border-radius:10px;margin-bottom:8px}
-.ac{border-left:4px solid #e5e7eb;border-radius:12px;background:#fff;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);cursor:pointer;transition:box-shadow .15s}
-.ac:hover{box-shadow:0 4px 12px rgba(0,0,0,.12)}
-.tabbar{display:flex;gap:4px;background:#fff;border-radius:12px;padding:4px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:14px}
-.tab{flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:300}
-.sheet{background:#fff;border-radius:22px 22px 0 0;padding:24px;width:100%;max-width:500px;margin:0 auto;max-height:92vh;overflow-y:auto}
-.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
-.mth{border-radius:9px;overflow:hidden;aspect-ratio:1;background:#f3f4f6;position:relative}
-.mth img,.mth video{width:100%;height:100%;object-fit:cover}
-.nov{background:#dcfce7;border-radius:9px;padding:9px 12px;margin-bottom:6px;border-left:3px solid #16a34a}
-.hl{background:linear-gradient(135deg,#7c3aed,#5b21b6);border-radius:14px;padding:16px;color:#fff;margin-bottom:12px}
-.hdr{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-.back{background:#fff;border:1px solid #e5e7eb;border-radius:9px;padding:7px 14px;cursor:pointer;font-weight:700;font-size:14px;font-family:inherit;flex-shrink:0}
-.ibtn{border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
-.upload-bar{background:#e5e7eb;border-radius:20px;height:8px;margin-top:8px;overflow:hidden}
-.upload-fill{background:#16a34a;height:100%;border-radius:20px;transition:width .3s}
-.media-full{width:100%;border-radius:12px;margin-bottom:8px;display:block}
-video.media-full{max-height:280px;object-fit:contain;background:#000}
-</style>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Limpieza Pro</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <style>*{box-sizing:border-box;}body{margin:0;padding:0;background:#0b0f18;color:#dce8f4;font-family:'DM Sans',system-ui,sans-serif;}select option{background:#0b0f18;}optgroup{background:#0b0f18;font-style:normal;font-weight:700;}</style>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet"/>
+
 </head>
 <body>
-<div id="R" style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:52px">🧹</div>
-<script>
-firebase.initializeApp({
-  apiKey:"AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
-  authDomain:"lavanderia-limpieza.firebaseapp.com",
-  projectId:"lavanderia-limpieza",
-  storageBucket:"lavanderia-limpieza.firebasestorage.app",
-  messagingSenderId:"229695150868",
-  appId:"1:229695150868:web:082157b403bcef987b8001"
-});
-var db=firebase.firestore();
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
 
-var PASS_ADM="admin2024",PASS_GER="jose03.22";
-var SCRIPT_URL="https://script.google.com/macros/s/AKfycbw0HeCNmXgTSmkrg67gV-x7IG9Uh2Vbc-sYHL_TLI9NgA0fweeU4-Ksb9l6cPPHtEWWrg/exec";
-var G="#16a34a",R="#dc2626",B="#2563eb",O="#d97706",PU="#7c3aed",GR="#9ca3af";
-var MONTHS=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-var COLORS=["#16a34a","#2563eb","#d97706","#dc2626","#7c3aed","#0891b2","#be185d","#b45309"];
+// Firebase init
+if (!firebase.apps.length) { firebase.initializeApp({
+  apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
+  authDomain: "lavanderia-limpieza.firebaseapp.com",
+  projectId: "lavanderia-limpieza",
+  storageBucket: "lavanderia-limpieza.firebasestorage.app",
+  messagingSenderId: "229695150868",
+  appId: "1:229695150868:web:082157b403bcef987b8001"
+}); }
+const db = firebase.firestore();
+const DOC_REF = db.collection("app_data").doc("main");
 
-var DEF_APTS=[
-  {name:"201 LAURELES",client:"TCG",valor:0},{name:"302 LAURELES",client:"TCG",valor:0},
-  {name:"303 LAURELES",client:"TCG",valor:0},{name:"303 MONSERRATE",client:"TCG",valor:0},
-  {name:"306",client:"ROMULO",valor:0},{name:"308 BASELOFT",client:"DIEGO CAMACHO",valor:0},
-  {name:"311",client:"ADRIANA",valor:0},{name:"405",client:"ROMULO",valor:0},
-  {name:"501 AVENIDA DEL CERRO",client:"ALEJANDRA",valor:0},{name:"501",client:"TCG",valor:0},
-  {name:"503 BASELOFT",client:"TCG",valor:0},{name:"510",client:"BASELOFT",valor:0},
-  {name:"712",client:"RUFFGO",valor:0},{name:"810",client:"ADRIANA",valor:0},
-  {name:"1003",client:"TCG",valor:0},{name:"1103",client:"TCG",valor:0},
-  {name:"1305",client:"TCG",valor:0},{name:"1402",client:"TCG",valor:0},
-  {name:"1405",client:"TCG",valor:0},{name:"1703",client:"TCG",valor:0},
-  {name:"1802",client:"TCG",valor:0},{name:"2105",client:"TCG",valor:0},
-  {name:"2204",client:"LIGIA",valor:0},{name:"2404",client:"ALEJA",valor:0},
-  {name:"2505",client:"TCG",valor:0},{name:"2701",client:"TCG",valor:0}
+const DEFAULT_APARTMENTS = [
+  { id:"a1",  aptNumber:"201",       building:"TCG",        displayName:"201 TCG",           clientName:"TCG",          price:55425  },
+  { id:"a2",  aptNumber:"201",       building:"Laureles",   displayName:"201 Laureles",      clientName:"TCG",          price:103800 },
+  { id:"a3",  aptNumber:"201",       building:"Aiana",      displayName:"201 Aiana",         clientName:"TCG",          price:55425  },
+  { id:"a4",  aptNumber:"203",       building:"TCG",        displayName:"203 TCG",           clientName:"Jose",         price:50000  },
+  { id:"a5",  aptNumber:"301",       building:"Laureles",   displayName:"301 Laureles",      clientName:"TCG",          price:96450  },
+  { id:"a6",  aptNumber:"302",       building:"Laureles",   displayName:"302 Laureles",      clientName:"TCG",          price:96450  },
+  { id:"a7",  aptNumber:"303",       building:"TCG",        displayName:"303 TCG",           clientName:"TCG",          price:50175  },
+  { id:"a8",  aptNumber:"303",       building:"Laureles",   displayName:"303 Laureles",      clientName:"TCG",          price:103800 },
+  { id:"a9",  aptNumber:"303",       building:"Monserrate", displayName:"303 Monserrate",    clientName:"TCG",          price:50175  },
+  { id:"a10", aptNumber:"306",       building:"TCG",        displayName:"306 TCG",           clientName:"Romulo",       price:65000  },
+  { id:"a11", aptNumber:"308",       building:"Baseloft",   displayName:"308 Baseloft",      clientName:"Diego",        price:50000  },
+  { id:"a12", aptNumber:"311",       building:"TCG",        displayName:"311 TCG",           clientName:"Adriana",      price:50000  },
+  { id:"a13", aptNumber:"402",       building:"TCG",        displayName:"402 TCG",           clientName:"Adriana",      price:50000  },
+  { id:"a14", aptNumber:"405",       building:"TCG",        displayName:"405 TCG",           clientName:"Romulo",       price:65000  },
+  { id:"a15", aptNumber:"501",       building:"TCG",        displayName:"501 TCG",           clientName:"TCG",          price:50175  },
+  { id:"a16", aptNumber:"501",       building:"Ruffgo",     displayName:"501 Ruffgo",        clientName:"TCG",          price:50000  },
+  { id:"a17", aptNumber:"501",       building:"Cerro",      displayName:"501 Cerro",         clientName:"Alejandra",    price:50000  },
+  { id:"a18", aptNumber:"503",       building:"Baseloft",   displayName:"503 Baseloft",      clientName:"TCG",          price:50175  },
+  { id:"a19", aptNumber:"507",       building:"TCG",        displayName:"507 TCG",           clientName:"Ligia",        price:50000  },
+  { id:"a20", aptNumber:"510",       building:"Baseloft",   displayName:"510 Baseloft",      clientName:"Sergio",       price:50000  },
+  { id:"a21", aptNumber:"601",       building:"TCG",        displayName:"601 TCG",           clientName:"TCG",          price:55425  },
+  { id:"a22", aptNumber:"712",       building:"Ruffgo",     displayName:"712 Ruffgo",        clientName:"TCG",          price:50000  },
+  { id:"a23", aptNumber:"802",       building:"TCG",        displayName:"802 TCG",           clientName:"Adriana",      price:50000  },
+  { id:"a24", aptNumber:"805",       building:"Monserrate", displayName:"805 Monserrate",    clientName:"TCG",          price:50175  },
+  { id:"a25", aptNumber:"809",       building:"TCG",        displayName:"809 TCG",           clientName:"Adriana",      price:50000  },
+  { id:"a26", aptNumber:"810",       building:"TCG",        displayName:"810 TCG",           clientName:"Adriana",      price:50000  },
+  { id:"a27", aptNumber:"903",       building:"TCG",        displayName:"903 TCG",           clientName:"Aleja",        price:50000  },
+  { id:"a28", aptNumber:"911",       building:"Ruffgo",     displayName:"911 Ruffgo",        clientName:"TCG",          price:50000  },
+  { id:"a29", aptNumber:"1003",      building:"TCG",        displayName:"1003 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a30", aptNumber:"1103",      building:"TCG",        displayName:"1103 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a31", aptNumber:"1203",      building:"Aiana",      displayName:"1203 Aiana",        clientName:"Veronica",     price:50000  },
+  { id:"a32", aptNumber:"1305",      building:"TCG",        displayName:"1305 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a33", aptNumber:"1402",      building:"TCG",        displayName:"1402 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a34", aptNumber:"1405",      building:"TCG",        displayName:"1405 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a35", aptNumber:"1703",      building:"TCG",        displayName:"1703 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a36", aptNumber:"1802",      building:"TCG",        displayName:"1802 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a37", aptNumber:"2102",      building:"TCG",        displayName:"2102 TCG",          clientName:"Sergio Gallo", price:50000  },
+  { id:"a38", aptNumber:"2105",      building:"TCG",        displayName:"2105 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a39", aptNumber:"2204",      building:"TCG",        displayName:"2204 TCG",          clientName:"Ligia",        price:50000  },
+  { id:"a40", aptNumber:"2404",      building:"TCG",        displayName:"2404 TCG",          clientName:"Aleja",        price:50000  },
+  { id:"a41", aptNumber:"2505",      building:"TCG",        displayName:"2505 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a42", aptNumber:"2701",      building:"TCG",        displayName:"2701 TCG",          clientName:"TCG",          price:50175  },
+  { id:"a43", aptNumber:"Ciudadela", building:"Sevilla",    displayName:"Ciudadela Sevilla", clientName:"Romulo",       price:110000 },
+  { id:"a44", aptNumber:"",          building:"Belen",      displayName:"Belen",             clientName:"Alejandra",    price:50000  },
 ];
-var DEF_WORKERS=["Maria Garcia","Juan Lopez","Ana Martinez","Pedro Rodriguez","Laura Gomez"];
-var DEF_CLIENTS=["ADRIANA","ALEJA","ALEJANDRA","BASELOFT","DIEGO CAMACHO","LIGIA","ROMULO","RUFFGO","TCG"];
+const DEFAULT_EMPLOYEES = ["AMADALITH","ARIANNY","YAZMINA","NUBIA","YESSICA","ALEJANDRO","JESSICA","CAMILO","JOSE","DEISY","ALEJANDRA"];
+const DEFAULT_SETTINGS  = { adminPassword:"jose0322", empPassword:"123" };
 
-var S={
-  screen:"home",
-  apts:DEF_APTS.map(function(a){return{name:a.name,client:a.client,valor:Number(a.valor)||0}}),
-  workers:DEF_WORKERS.slice(),
-  clients:DEF_CLIENTS.slice(),
-  who:"",apt:null,
-  t:0,novs:[],emIn:[],emDan:[],emOut:[],
-  modal:false,novForm:false,
-  sid:null,stime:null,tint:null,lastRec:null,
-  uploading:false,uploadPct:0,
-  role:"",passErr:"",
-  recs:[],poll:null,
-  detalle:null,
-  hFrom:"",hTo:"",fW:"",fA:"",fC:"",
-  gTab:"deuda",
-  dFrom:"",
-  dTo:"",
-  cTab:"apts",aptForm:null,ewIdx:-1,ecIdx:-1
-};
+const fmtCOP   = (n) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n||0);
+const todayStr = () => new Date().toISOString().split("T")[0];
+const fmtDate  = (d) => { if(!d) return ""; const [y,m,day]=d.split("-"); return `${day}/${m}/${y}`; };
+const uid      = () => Math.random().toString(36).slice(2,9);
 
-// Sesion persistente
-function saveSession(){try{localStorage.setItem("cl_role",S.role)}catch(e){}}
-function loadSession(){try{var r=localStorage.getItem("cl_role");if(r)S.role=r}catch(e){}}
-function clearSession(){try{localStorage.removeItem("cl_role")}catch(e){}}
+const C={bg:"#0b0f18",surface:"#141920",card:"#1a2130",border:"#252d3d",accent:"#f0b429",text:"#dce8f4",muted:"#6b7a99",success:"#22c55e",danger:"#ef4444",info:"#3b82f6"};
 
-// Utils
-function fmt(s){return[Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(function(x){return String(x).padStart(2,"0")}).join(":")}
-function fD(d){try{return new Date(d).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"})}catch(e){return""}}
-function fH(d){try{return new Date(d).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"})}catch(e){return""}}
-function nowT(){return new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
-function pesos(v){return"$"+Number(v||0).toLocaleString("es-CO")}
-function td(t){if(!t)return new Date();if(t.toDate)return t.toDate();return new Date(t)}
-function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
-function aptL(a){return a?a.name+" ("+a.client+")":""}
-
-// Firebase config
-function loadCfg(){
-  db.collection("config").doc("apartamentos").get().then(function(d){
-    if(d.exists&&d.data().list&&d.data().list.length){
-      var l=d.data().list;
-      if(typeof l[0]==="object"&&l[0].name)
-        S.apts=l.map(function(a){return{name:String(a.name||""),client:String(a.client||""),valor:Number(a.valor)||0}});
-    }
-    return db.collection("config").doc("trabajadores").get();
-  }).then(function(d){
-    if(d.exists&&d.data().list&&d.data().list.length)S.workers=d.data().list.slice();
-    return db.collection("config").doc("clientes").get();
-  }).then(function(d){
-    if(d.exists&&d.data().list&&d.data().list.length)S.clients=d.data().list.slice();
-    loadSession();
-    if(S.role==="adm"||S.role==="ger"){fetchRecs();clearInterval(S.poll);S.poll=setInterval(fetchRecs,15000)}
-    render();
-  }).catch(function(){render()});
+function Btn({children,onClick,variant="primary",size="md",style:ex={},disabled}){
+  const base={border:"none",cursor:disabled?"not-allowed":"pointer",borderRadius:"8px",fontWeight:"600",transition:"all 0.15s",fontFamily:"inherit",opacity:disabled?0.5:1,fontSize:size==="sm"?"12px":"14px",padding:size==="sm"?"6px 12px":"10px 20px"};
+  const v={primary:{background:C.accent,color:"#0b0f18"},ghost:{background:"transparent",color:C.text,border:`1px solid ${C.border}`},danger:{background:C.danger,color:"#fff"},success:{background:C.success,color:"#fff"},info:{background:C.info,color:"#fff"}};
+  return <button disabled={disabled} onClick={onClick} style={{...base,...v[variant],...ex}}>{children}</button>;
 }
-function saveApts(cb){
-  var list=S.apts.map(function(a){return{name:String(a.name),client:String(a.client),valor:Number(a.valor)||0}});
-  db.collection("config").doc("apartamentos").set({list:list}).then(function(){if(cb)cb()}).catch(function(e){alert("Error: "+e.message)});
+function Inp({value,onChange,placeholder,type="text",style:ex={}}){
+  return <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",...ex}}/>;
 }
-function saveWorkers(){db.collection("config").doc("trabajadores").set({list:S.workers.slice()}).catch(function(){})}
-function saveClients(){db.collection("config").doc("clientes").set({list:S.clients.slice()}).catch(function(){})}
-function fetchRecs(){
-  db.collection("limpiezas").orderBy("startTime","desc").limit(2000).get().then(function(snap){
-    S.recs=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())});
-    render();
-  }).catch(function(){});
+function Sel({value,onChange,children,style:ex={}}){
+  return <select value={value} onChange={e=>onChange(e.target.value)} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",...ex}}>{children}</select>;
+}
+function Card({children,style:ex={}}){return <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"20px",...ex}}>{children}</div>;}
+function Lbl({children}){return <div style={{fontSize:"12px",fontWeight:"600",color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:"6px"}}>{children}</div>;}
+function Badge({paid}){return <span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:paid?"#14532d":"#450a0a",color:paid?C.success:C.danger}}>{paid?"✓ Pagado":"Pendiente"}</span>;}
+
+function LoginView({loginRole,setLoginRole,pw,setPw,error,onLogin}){
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{width:"100%",maxWidth:380}}>
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <div style={{fontSize:48,marginBottom:12}}>🧹</div>
+          <h1 style={{margin:0,fontSize:28,fontWeight:800,color:C.text,letterSpacing:"-0.03em"}}>Limpieza Pro</h1>
+          <p style={{margin:"6px 0 0",color:C.muted,fontSize:14}}>Gestión de limpiezas de apartamentos</p>
+        </div>
+        <Card>
+          <div style={{display:"flex",background:C.bg,borderRadius:8,padding:4,marginBottom:20}}>
+            {[["employee","👤 Encargado"],["admin","👑 Admin"]].map(([r,label])=>(
+              <button key={r} onClick={()=>setLoginRole(r)} style={{flex:1,padding:"9px",border:"none",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit",transition:"all 0.15s",background:loginRole===r?C.accent:"transparent",color:loginRole===r?"#0b0f18":C.muted}}>{label}</button>
+            ))}
+          </div>
+          <div style={{marginBottom:16}}><Lbl>Contraseña</Lbl><Inp type="password" value={pw} onChange={setPw} placeholder="••••••••"/></div>
+          {error&&<div style={{color:C.danger,fontSize:13,marginBottom:12,fontWeight:600}}>{error}</div>}
+          <Btn onClick={onLogin} style={{width:"100%",padding:"13px",fontSize:15}}>Entrar →</Btn>
+        </Card>
+      </div>
+    </div>
+  );
 }
 
-// ── MARCA DE AGUA ─────────────────────────────────────────────────────
-function addWatermark(dataURL, isVideo, label, cb) {
-  if (isVideo) { cb(dataURL); return; } // videos sin marca
-  var img = new Image();
-  img.onload = function() {
-    var canvas = document.createElement("canvas");
-    canvas.width = img.width; canvas.height = img.height;
-    var ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    // Fondo semitransparente abajo
-    var barH = Math.max(48, img.height * 0.08);
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillRect(0, img.height - barH, img.width, barH);
-    // Texto
-    var fs = Math.max(14, Math.round(img.width * 0.032));
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold " + fs + "px system-ui,sans-serif";
-    ctx.textBaseline = "middle";
-    var y = img.height - barH / 2;
-    ctx.fillText(label, 12, y);
-    cb(canvas.toDataURL("image/jpeg", 0.88));
+function EmployeeView({appData,update,showToast,onLogout}){
+  const [employee,setEmployee]=useState("");
+  const [aptId,setAptId]=useState("");
+  const [notes,setNotes]=useState("");
+  const [date,setDate]=useState(todayStr());
+  const [showNewApt,setShowNewApt]=useState(false);
+  const [selectedBuilding,setSelectedBuilding]=useState("");
+  const [nAptNum,setNAptNum]=useState("");
+  const [nBuilding,setNBuilding]=useState("");
+  const [nClient,setNClient]=useState("");
+  const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+  const buildings=[...new Set(appData.apartments.map(a=>a.building).filter(Boolean))].sort();
+  const clients=[...new Set(appData.apartments.map(a=>a.clientName).filter(Boolean))].sort();
+  const handleAddApt=()=>{
+    if(!nBuilding.trim()){showToast("El edificio es requerido","error");return;}
+    const num=nAptNum.trim(),bld=nBuilding.trim();
+    const displayName=num?`${num} ${bld}`:bld;
+    update("apartments",[...appData.apartments,{id:uid(),aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:0}]);
+    setNAptNum("");setNBuilding("");setNClient("");setShowNewApt(false);
+    showToast(`${displayName} agregado ✅`);
   };
-  img.src = dataURL;
+  const sorted=[...appData.apartments].sort((a,b)=>a.building.localeCompare(b.building)||String(a.aptNumber).localeCompare(String(b.aptNumber),undefined,{numeric:true}));
+  const buildingGroups=[...new Set(sorted.map(a=>a.building))];
+  const apt=appData.apartments.find(a=>a.id===aptId);
+  const todayList=appData.cleanings.filter(c=>c.date===todayStr()).sort((a,b)=>b.createdAt-a.createdAt);
+  const handleSubmit=()=>{
+    if(!employee||!aptId||!date){showToast("Completa todos los campos","error");return;}
+    const newC={id:uid(),date,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes,paid:false,amount:apt?.price||0,createdAt:Date.now()};
+    update("cleanings",[...appData.cleanings,newC]);
+    showToast("¡Limpieza registrada! ✅");
+    setAptId("");setNotes("");setSelectedBuilding("");
+  };
+  return(
+    <div style={{minHeight:"100vh",maxWidth:480,margin:"0 auto",padding:"20px 16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div><h2 style={{margin:0,fontSize:22,fontWeight:800}}>🧹 Nueva limpieza</h2><p style={{margin:"2px 0 0",color:C.muted,fontSize:13}}>{fmtDate(todayStr())}</p></div>
+        <Btn variant="ghost" size="sm" onClick={onLogout}>Salir</Btn>
+      </div>
+      <Card style={{marginBottom:20}}>
+        <div style={{marginBottom:14}}><Lbl>Tu nombre *</Lbl>
+          <Sel value={employee} onChange={setEmployee}><option value="">-- Selecciona --</option>{appData.employees.map(e=><option key={e} value={e}>{e}</option>)}</Sel>
+        </div>
+        <div style={{marginBottom:14}}>
+          <Lbl>Edificio *</Lbl>
+          <Sel value={selectedBuilding} onChange={v=>{setSelectedBuilding(v);setAptId("");}}>
+            <option value="">-- Selecciona edificio --</option>
+            {buildingGroups.map(b=><option key={b} value={b}>📍 {b} ({sorted.filter(a=>a.building===b).length} aptos)</option>)}
+          </Sel>
+        </div>
+        {selectedBuilding&&(
+          <div style={{marginBottom:14}}>
+            <Lbl>Apartamento *</Lbl>
+            <Sel value={aptId} onChange={setAptId}>
+              <option value="">-- Selecciona apartamento --</option>
+              {sorted.filter(a=>a.building===selectedBuilding).map(a=><option key={a.id} value={a.id}>{a.displayName}{a.clientName?` — ${a.clientName}`:""}</option>)}
+            </Sel>
+          </div>
+        )}
+        {apt&&(
+          <div style={{marginBottom:14,padding:"12px 14px",background:C.surface,borderRadius:8}}>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.muted,fontSize:13}}>Cliente</span><span style={{fontWeight:700,fontSize:13,color:C.info}}>{apt.clientName||"—"}</span></div>
+          </div>
+        )}
+        <div style={{marginBottom:14}}><Lbl>Fecha *</Lbl><Inp type="date" value={date} onChange={setDate}/></div>
+        <div style={{marginBottom:20}}><Lbl>Observaciones (opcional)</Lbl>
+          <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Estado del apartamento, novedades..." rows={3} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+        </div>
+        <Btn onClick={handleSubmit} style={{width:"100%",padding:"14px",fontSize:15}}>✓ Registrar limpieza</Btn>
+      </Card>
+      <div style={{marginBottom:20}}>
+        <button onClick={()=>setShowNewApt(!showNewApt)} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.border}`,borderRadius:10,color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
+          {showNewApt?"✕ Cancelar":"➕ Agregar apartamento nuevo"}
+        </button>
+        {showNewApt&&(
+          <Card style={{marginTop:10}}>
+            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:700}}>Nuevo apartamento</h3>
+            <div style={{marginBottom:12}}><Lbl>Número de apto</Lbl><Inp value={nAptNum} onChange={setNAptNum} placeholder="Ej: 303"/></div>
+            <div style={{marginBottom:12}}><Lbl>Edificio *</Lbl><input list="emp-blist" value={nBuilding} onChange={e=>setNBuilding(e.target.value)} placeholder="Ej: Monserrate" style={inpStyle}/><datalist id="emp-blist">{buildings.map(b=><option key={b} value={b}/>)}</datalist></div>
+            <div style={{marginBottom:16}}><Lbl>Cliente</Lbl><input list="emp-clist" value={nClient} onChange={e=>setNClient(e.target.value)} placeholder="Ej: Veronica" style={inpStyle}/><datalist id="emp-clist">{clients.map(cl=><option key={cl} value={cl}/>)}</datalist></div>
+            <div style={{fontSize:11,color:C.muted,marginBottom:12}}>* El precio lo define el admin después.</div>
+            <Btn onClick={handleAddApt} style={{width:"100%"}}>+ Agregar</Btn>
+          </Card>
+        )}
+      </div>
+      {todayList.length>0&&(
+        <div>
+          <div style={{color:C.muted,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:12}}>Mis registros de hoy — {todayList.length}</div>
+          {todayList.map(c=>(
+            <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px",marginBottom:10}}>
+              <div style={{fontWeight:700,fontSize:14}}>{c.apartmentName}</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{c.clientName} · {c.employeeName} · {c.time}</div>
+              {c.notes&&<div style={{fontSize:12,color:C.muted,marginTop:2,fontStyle:"italic"}}>"{c.notes}"</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Historial de limpiezas por fecha */}
+      <CleaningHistoryEmployee cleanings={appData.cleanings}/>
+    </div>
+  );
 }
 
-function buildWatermarkLabel(apt, folder) {
-  var now = new Date();
-  var fecha = now.toLocaleDateString("es-CO", {day:"2-digit",month:"2-digit",year:"numeric"});
-  var hora  = now.toLocaleTimeString("es-CO", {hour:"2-digit",minute:"2-digit"});
-  var tipo  = folder==="entrada"?"ENTRADA":folder==="salida"?"SALIDA":"DAÑOS";
-  return tipo + "  " + (apt||"") + "  " + fecha + "  " + hora;
+function BackupSection({appData,update,showToast}){
+  const firstDay=todayStr().slice(0,8)+"01";
+  const [dateFrom,setDateFrom]=useState(firstDay);
+  const [dateTo,setDateTo]=useState(todayStr());
+  const fileRef=React.useRef(null);
+  const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+
+  const toCSV=(rows,headers)=>{
+    const esc=(v)=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+    return[headers.map(esc).join(","),...rows.map(r=>headers.map(h=>esc(r[h])).join(","))].join("\n");
+  };
+
+  const downloadExcel=()=>{
+    const filtered=appData.cleanings.filter(c=>{
+      if(dateFrom&&c.date<dateFrom)return false;
+      if(dateTo&&c.date>dateTo)return false;
+      return true;
+    }).sort((a,b)=>a.date?.localeCompare(b.date)||a.createdAt-b.createdAt);
+    if(filtered.length===0){showToast("No hay registros en ese rango","error");return;}
+
+    const headers=["Fecha","Hora","Encargado","Apartamento","Cliente","Observaciones","Valor","Pagado"];
+    const rows=filtered.map(c=>({"Fecha":fmtDate(c.date),"Hora":c.time||"","Encargado":c.employeeName||"","Apartamento":c.apartmentName||"","Cliente":c.clientName||"","Observaciones":c.notes||"","Valor":c.amount||0,"Pagado":c.paid?"Sí":"No"}));
+
+    const byEmp={};
+    filtered.forEach(c=>{if(!byEmp[c.employeeName])byEmp[c.employeeName]={limpiezas:0,total:0,pagado:0,pendiente:0};byEmp[c.employeeName].limpiezas++;byEmp[c.employeeName].total+=c.amount||0;if(c.paid)byEmp[c.employeeName].pagado+=c.amount||0;else byEmp[c.employeeName].pendiente+=c.amount||0;});
+    const empRows=Object.entries(byEmp).map(([n,d])=>({"Encargado":n,"Limpiezas":d.limpiezas,"Total":d.total,"Pagado":d.pagado,"Pendiente":d.pendiente}));
+
+    const byClient={};
+    filtered.forEach(c=>{const k=c.clientName||"Sin cliente";if(!byClient[k])byClient[k]={limpiezas:0,total:0,pagado:0,pendiente:0};byClient[k].limpiezas++;byClient[k].total+=c.amount||0;if(c.paid)byClient[k].pagado+=c.amount||0;else byClient[k].pendiente+=c.amount||0;});
+    const clientRows=Object.entries(byClient).map(([n,d])=>({"Cliente":n,"Limpiezas":d.limpiezas,"Total":d.total,"Pagado":d.pagado,"Pendiente":d.pendiente}));
+
+    const sep="\n\n";
+    const csv="\uFEFF"+"REGISTROS DE LIMPIEZAS\n"+toCSV(rows,headers)+sep+"RESUMEN POR ENCARGADO\n"+toCSV(empRows,["Encargado","Limpiezas","Total","Pagado","Pendiente"])+sep+"RESUMEN POR CLIENTE\n"+toCSV(clientRows,["Cliente","Limpiezas","Total","Pagado","Pendiente"]);
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=`limpiezas-${dateFrom}-al-${dateTo}.csv`;a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Excel descargado — ${filtered.length} registros ✅`);
+  };
+
+  const downloadJson=()=>{
+    const blob=new Blob([JSON.stringify(appData,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`backup-${todayStr()}.json`;a.click();
+    URL.revokeObjectURL(url);showToast("Backup completo descargado ✅");
+  };
+
+  const uploadBackup=(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      try{
+        const p=JSON.parse(ev.target.result);
+        if(!p.apartments||!p.cleanings||!p.employees||!p.settings){showToast("Archivo inválido","error");return;}
+        if(!window.confirm("¿Restaurar este backup? Se reemplazarán todos los datos actuales."))return;
+        update("apartments",p.apartments);update("cleanings",p.cleanings);update("employees",p.employees);update("settings",p.settings);
+        showToast("Backup restaurado ✅");
+      }catch(err){showToast("Error al leer el archivo","error");}
+    };
+    reader.readAsText(file);e.target.value="";
+  };
+
+  const count=appData.cleanings.filter(c=>(!dateFrom||c.date>=dateFrom)&&(!dateTo||c.date<=dateTo)).length;
+
+  return(
+    <div style={{maxWidth:560}}>
+      <h3 style={{margin:"0 0 20px",fontSize:17,fontWeight:800}}>💾 Backup y exportación</h3>
+      <Card style={{marginBottom:16}}>
+        <h4 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:C.accent}}>📊 Exportar a Excel</h4>
+        <p style={{margin:"0 0 16px",fontSize:13,color:C.muted,lineHeight:1.5}}>Exporta los registros en formato CSV (compatible con Excel y Google Sheets). Filtra por rango de fechas. Incluye registros, resumen por encargado y resumen por cliente.</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+          <div><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Desde</div><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={inpStyle}/></div>
+          <div><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Hasta</div><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={inpStyle}/></div>
+        </div>
+        <button onClick={downloadExcel} style={{width:"100%",padding:"13px",background:"#14532d",border:`1px solid ${C.success}`,borderRadius:8,color:C.success,cursor:"pointer",fontFamily:"inherit",fontSize:14,fontWeight:700}}>
+          ⬇️ Descargar Excel ({count} registros)
+        </button>
+      </Card>
+      <Card>
+        <h4 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:C.info}}>🗄️ Backup completo</h4>
+        <p style={{margin:"0 0 16px",fontSize:13,color:C.muted,lineHeight:1.5}}>Descarga o restaura un backup de todos los datos: apartamentos, encargados, configuración y registros históricos.</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button onClick={downloadJson} style={{padding:"12px",background:"#1e3a5f",border:`1px solid ${C.info}`,borderRadius:8,color:C.info,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>⬇️ Descargar backup</button>
+          <button onClick={()=>fileRef.current.click()} style={{padding:"12px",background:"#450a0a",border:`1px solid ${C.danger}`,borderRadius:8,color:C.danger,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>⬆️ Restaurar backup</button>
+        </div>
+        <input ref={fileRef} type="file" accept=".json" onChange={uploadBackup} style={{display:"none"}}/>
+        <div style={{marginTop:12,padding:"10px 12px",background:"#0b0f18",borderRadius:8,fontSize:11,color:C.muted}}>⚠️ Al restaurar se reemplazarán <strong style={{color:C.text}}>todos los datos actuales</strong>.</div>
+      </Card>
+    </div>
+  );
 }
 
-function getLocation() {
-  return new Promise(function(resolve) {
-    if (!navigator.geolocation) { resolve(""); return; }
-    navigator.geolocation.getCurrentPosition(
-      function(pos) { resolve(pos.coords.latitude.toFixed(5)+","+pos.coords.longitude.toFixed(5)); },
-      function() { resolve(""); },
-      {timeout:5000}
-    );
+function CleaningHistoryEmployee({cleanings}){
+  const [dateFrom,setDateFrom]=useState(todayStr());
+  const [dateTo,setDateTo]=useState(todayStr());
+  const filtered=cleanings
+    .filter(c=>{
+      if(dateFrom&&c.date<dateFrom) return false;
+      if(dateTo&&c.date>dateTo) return false;
+      return true;
+    })
+    .sort((a,b)=>b.date!==a.date?b.date?.localeCompare(a.date):b.createdAt-a.createdAt);
+  return(
+    <div style={{marginTop:8}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+          <span style={{fontWeight:700,fontSize:14}}>📋 Limpiezas registradas</span>
+          <span style={{fontSize:12,color:C.muted}}>{filtered.length} resultado{filtered.length!==1?"s":""}</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Desde</div>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+              style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:"#dce8f4",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Hasta</div>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+              style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:"#dce8f4",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
+        </div>
+        {filtered.length===0
+          ?<div style={{textAlign:"center",padding:24,color:C.muted,fontSize:13}}>No hay limpiezas en este rango de fechas</div>
+          :filtered.map(c=>(
+            <div key={c.id} style={{padding:"12px",marginBottom:8,background:"#0b0f18",borderRadius:8,border:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14}}>{c.apartmentName}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:3}}>
+                    {c.clientName&&<span style={{color:"#3b82f6",fontWeight:600}}>{c.clientName} · </span>}
+                    <span>{c.employeeName}</span>
+                    {c.time&&<span> · {c.time}</span>}
+                  </div>
+                  {c.notes&&<div style={{fontSize:12,color:C.muted,marginTop:4,fontStyle:"italic"}}>"{c.notes}"</div>}
+                </div>
+                <div style={{fontSize:11,color:C.muted,whiteSpace:"nowrap"}}>{fmtDate(c.date)}</div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+function AdminView({appData,update,showToast,onLogout,tab,setTab}){
+  const tabs=[["dashboard","📊 Resumen"],["cleanings","🧹 Registros"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
+  return(
+    <div style={{minHeight:"100vh"}}>
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`}}>
+        <div style={{maxWidth:1100,margin:"0 auto",padding:"0 20px",display:"flex",justifyContent:"space-between",alignItems:"center",height:60}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:24}}>🧹</span>
+            <span style={{fontWeight:800,fontSize:17}}>Limpieza Pro</span>
+            <span style={{color:C.accent,fontSize:11,fontWeight:700,padding:"2px 8px",background:"#2a1a00",borderRadius:20}}>ADMIN</span>
+          </div>
+          <Btn variant="ghost" size="sm" onClick={onLogout}>Salir</Btn>
+        </div>
+      </div>
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`}}>
+        <div style={{maxWidth:1100,margin:"0 auto",padding:"0 20px",display:"flex",gap:2,overflowX:"auto"}}>
+          {tabs.map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{padding:"14px 16px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700,color:tab===id?C.accent:C.muted,borderBottom:tab===id?`2px solid ${C.accent}`:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap"}}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 20px"}}>
+        {tab==="dashboard"&&<DashboardTab appData={appData}/>}
+        {tab==="cleanings"&&<CleaningsTab appData={appData} update={update} showToast={showToast}/>}
+        {tab==="clients"  &&<ClientsTab   appData={appData} update={update} showToast={showToast}/>}
+        {tab==="config"   &&<ConfigTab    appData={appData} update={update} showToast={showToast}/>}
+      </div>
+    </div>
+  );
+}
+
+function DashboardTab({appData}){
+  const {cleanings}=appData;
+  const today=todayStr(), thisMonth=today.slice(0,7);
+
+  // Stats
+  const todayC   = cleanings.filter(c=>c.date===today);
+  const monthC   = cleanings.filter(c=>c.date&&c.date.startsWith(thisMonth));
+  const allPending= cleanings.filter(c=>!c.paid);
+  const totalPending=allPending.reduce((s,c)=>s+(c.amount||0),0);
+  const totalMonth  =monthC.reduce((s,c)=>s+(c.amount||0),0);
+  const paidMonth   =monthC.filter(c=>c.paid).reduce((s,c)=>s+(c.amount||0),0);
+  const totalAll    =cleanings.reduce((s,c)=>s+(c.amount||0),0);
+  const paidAll     =cleanings.filter(c=>c.paid).reduce((s,c)=>s+(c.amount||0),0);
+
+  // Month-by-month breakdown (all history)
+  const byMonth={};
+  cleanings.forEach(c=>{
+    if(!c.date) return;
+    const m=c.date.slice(0,7);
+    if(!byMonth[m]) byMonth[m]={month:m,count:0,total:0,paid:0,pending:0};
+    byMonth[m].count++;
+    byMonth[m].total+=c.amount||0;
+    if(c.paid) byMonth[m].paid+=c.amount||0;
+    else byMonth[m].pending+=c.amount||0;
   });
+  const months=Object.values(byMonth).sort((a,b)=>b.month.localeCompare(a.month));
+  const fmtMonth=m=>{ const [y,mo]=m.split("-"); const names=["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]; return `${names[parseInt(mo)]} ${y}`; };
+
+  const recent=[...cleanings].sort((a,b)=>b.createdAt-a.createdAt).slice(0,10);
+
+  return(
+    <div>
+      <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Resumen general</h2>
+
+      {/* KPI cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:24}}>
+        {[
+          {label:"Limpiezas hoy",       value:todayC.length,        color:C.info,    icon:"🧹", sub:"registros de hoy"},
+          {label:"Este mes",            value:monthC.length,        color:C.accent,  icon:"📅", sub:`${fmtCOP(totalMonth)} facturado`},
+          {label:"Cobrado este mes",    value:fmtCOP(paidMonth),    color:C.success, icon:"💰", sub:`de ${fmtCOP(totalMonth)} total`},
+          {label:"⚠️ Por cobrar total", value:fmtCOP(totalPending), color:C.danger,  icon:"⏳", sub:`${allPending.length} registros pendientes`},
+        ].map(s=><Card key={s.label} style={{borderTop:`3px solid ${s.color}`}}><div style={{fontSize:28,marginBottom:8}}>{s.icon}</div><div style={{fontSize:22,fontWeight:800,color:s.color}}>{s.value}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>{s.label}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{s.sub}</div></Card>)}
+      </div>
+
+      {/* Month comparison */}
+      {months.length>0&&(
+        <Card style={{marginBottom:24}}>
+          <h3 style={{margin:"0 0 4px",fontSize:15,fontWeight:700}}>📆 Comparativo mes a mes</h3>
+          <p style={{margin:"0 0 16px",fontSize:12,color:C.muted}}>Historial completo guardado — nunca se pierde</p>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:`1px solid ${C.border}`}}>
+                  {["Mes","Limpiezas","Facturado","Cobrado","Pendiente"].map(h=><th key={h} style={{textAlign:"left",padding:"8px 12px",color:C.muted,fontWeight:700}}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {months.map(m=>(
+                  <tr key={m.month} style={{borderBottom:`1px solid ${C.border}`,background:m.month===thisMonth?"#1a2a1a":"transparent"}}>
+                    <td style={{padding:"10px 12px",fontWeight:700,color:m.month===thisMonth?C.success:C.text}}>{fmtMonth(m.month)}{m.month===thisMonth&&<span style={{marginLeft:6,fontSize:10,color:C.success,fontWeight:600}}>● actual</span>}</td>
+                    <td style={{padding:"10px 12px",color:C.muted}}>{m.count}</td>
+                    <td style={{padding:"10px 12px",fontWeight:600}}>{fmtCOP(m.total)}</td>
+                    <td style={{padding:"10px 12px",color:C.success,fontWeight:600}}>{fmtCOP(m.paid)}</td>
+                    <td style={{padding:"10px 12px",color:m.pending>0?C.danger:C.muted,fontWeight:m.pending>0?700:400}}>{m.pending>0?fmtCOP(m.pending):"—"}</td>
+                  </tr>
+                ))}
+                <tr style={{borderTop:`2px solid ${C.border}`,background:C.surface}}>
+                  <td style={{padding:"10px 12px",fontWeight:800,color:C.text}}>TOTAL</td>
+                  <td style={{padding:"10px 12px",fontWeight:800}}>{cleanings.length}</td>
+                  <td style={{padding:"10px 12px",fontWeight:800}}>{fmtCOP(totalAll)}</td>
+                  <td style={{padding:"10px 12px",fontWeight:800,color:C.success}}>{fmtCOP(paidAll)}</td>
+                  <td style={{padding:"10px 12px",fontWeight:800,color:C.danger}}>{fmtCOP(totalPending)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Pending payments — never lost */}
+      {allPending.length>0&&(
+        <Card style={{marginBottom:24,borderLeft:`4px solid ${C.danger}`}}>
+          <h3 style={{margin:"0 0 4px",fontSize:15,fontWeight:700,color:C.danger}}>⏳ Pendientes por cobrar ({allPending.length})</h3>
+          <p style={{margin:"0 0 14px",fontSize:12,color:C.muted}}>Registros de todos los meses sin pagar — {fmtCOP(totalPending)}</p>
+          <div style={{maxHeight:260,overflowY:"auto"}}>
+            {[...allPending].sort((a,b)=>a.date?.localeCompare(b.date)).map(c=>(
+              <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600}}>{c.apartmentName} <span style={{color:C.info,fontWeight:400}}>· {c.clientName}</span></div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>{fmtDate(c.date)} · {c.employeeName}</div>
+                </div>
+                <span style={{color:C.danger,fontWeight:800,fontSize:13,whiteSpace:"nowrap"}}>{fmtCOP(c.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Recent */}
+      <Card>
+        <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:700}}>Registros recientes</h3>
+        {recent.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No hay registros aún.</div>:(
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{borderBottom:`1px solid ${C.border}`}}>{["Fecha","Encargado","Apartamento","Cliente","Valor","Estado"].map(h=><th key={h} style={{textAlign:"left",padding:"8px 12px",color:C.muted,fontWeight:700}}>{h}</th>)}</tr></thead>
+              <tbody>{recent.map(c=><tr key={c.id} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"10px 12px",color:C.muted}}>{fmtDate(c.date)}</td><td style={{padding:"10px 12px",fontWeight:700}}>{c.employeeName}</td><td style={{padding:"10px 12px"}}>{c.apartmentName}</td><td style={{padding:"10px 12px",color:C.info,fontWeight:600}}>{c.clientName||"—"}</td><td style={{padding:"10px 12px",color:C.accent,fontWeight:700}}>{fmtCOP(c.amount)}</td><td style={{padding:"10px 12px"}}><Badge paid={c.paid}/></td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
 }
 
-// ── SUBIR A GOOGLE DRIVE ──────────────────────────────────────────────
-function uploadToDrive(dataURL, name, subfolder) {
-  var parts = dataURL.split(",");
-  var mime  = parts[0].match(/:(.*?);/)[1];
-  var b64   = parts[1];
-  return fetch(SCRIPT_URL, {
-    method: "POST",
-    body: JSON.stringify({ base64: b64, mime: mime, name: name, subfolder: subfolder })
-  }).then(function(r){ return r.json(); }).then(function(j){
-    return j.ok ? j.url : null;
-  }).catch(function(){ return null; });
+function EditModal({cleaning,appData,onSave,onClose}){
+  const [form,setForm]=useState({...cleaning});
+  const sorted=[...appData.apartments].sort((a,b)=>a.displayName.localeCompare(b.displayName));
+  const buildingGroups=[...new Set(sorted.map(a=>a.building))];
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const handleApt=(aptId)=>{
+    const apt=appData.apartments.find(a=>a.id===aptId);
+    if(apt) set("apartmentId",aptId),set("apartmentName",apt.displayName),set("clientName",apt.clientName||""),set("amount",apt.price||0);
+  };
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:24,width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{margin:0,fontSize:17,fontWeight:800}}>✏️ Editar registro</h3>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:20,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{marginBottom:14}}><Lbl>Fecha</Lbl><Inp type="date" value={form.date||""} onChange={v=>set("date",v)}/></div>
+        <div style={{marginBottom:14}}><Lbl>Encargado</Lbl>
+          <select value={form.employeeName||""} onChange={e=>set("employeeName",e.target.value)} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}>
+            <option value="">-- Selecciona --</option>
+            {appData.employees.map(e=><option key={e} value={e}>{e}</option>)}
+          </select>
+        </div>
+        <div style={{marginBottom:14}}><Lbl>Apartamento</Lbl>
+          <select value={form.apartmentId||""} onChange={e=>handleApt(e.target.value)} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}>
+            <option value="">-- Selecciona --</option>
+            {buildingGroups.map(b=><optgroup key={b} label={`📍 ${b}`}>{sorted.filter(a=>a.building===b).map(a=><option key={a.id} value={a.id}>{a.displayName}{a.clientName?` — ${a.clientName}`:""}</option>)}</optgroup>)}
+          </select>
+        </div>
+        <div style={{marginBottom:14}}><Lbl>Cliente</Lbl><Inp value={form.clientName||""} onChange={v=>set("clientName",v)} placeholder="Cliente"/></div>
+        <div style={{marginBottom:14}}><Lbl>Valor (COP)</Lbl><Inp type="number" value={form.amount||""} onChange={v=>set("amount",parseInt(v)||0)} placeholder="50000"/></div>
+        <div style={{marginBottom:14}}><Lbl>Observaciones</Lbl>
+          <textarea value={form.notes||""} onChange={e=>set("notes",e.target.value)} rows={3} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+        </div>
+        <div style={{marginBottom:20}}><Lbl>Estado de pago</Lbl>
+          <div style={{display:"flex",background:C.bg,borderRadius:8,padding:4}}>
+            {[["false","⏳ Pendiente"],["true","✓ Pagado"]].map(([val,label])=>(
+              <button key={val} onClick={()=>set("paid",val==="true")} style={{flex:1,padding:"9px",border:"none",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit",transition:"all 0.15s",background:String(form.paid)===val?C.accent:"transparent",color:String(form.paid)===val?"#0b0f18":C.muted}}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <Btn variant="ghost" onClick={onClose} style={{flex:1}}>Cancelar</Btn>
+          <Btn onClick={()=>onSave(form)} style={{flex:1}}>💾 Guardar</Btn>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function saveMediaGroup(items, sid, folder, apt) {
-  if (!items.length) return Promise.resolve([]);
-  var subfolder = (apt||"limpieza").replace(/[^a-zA-Z0-9 ]/g,"").trim() + " — " + sid.slice(-6);
-  var label = buildWatermarkLabel(apt, folder);
-  var promises = items.map(function(it, i) {
-    return new Promise(function(resolve) {
-      addWatermark(it.url, it.isVideo, label, function(marked) {
-        var ext  = it.isVideo ? "mp4" : "jpg";
-        var name = folder + "_" + (i+1) + "_" + Date.now() + "." + ext;
-        uploadToDrive(marked, name, subfolder).then(function(url) {
-          // Guardar referencia en Firestore
-          var doc = { sid:sid, folder:folder, idx:i, url:url||marked, isVideo:it.isVideo, ts:firebase.firestore.Timestamp.now() };
-          db.collection("media").add(doc).then(function(){ resolve({url:url||marked,isVideo:it.isVideo}); }).catch(function(){ resolve({url:marked,isVideo:it.isVideo}); });
-        });
-      });
-    });
-  });
-  return Promise.all(promises);
-}
-
-function loadMediaGroup(sid, folder) {
-  return db.collection("media")
-    .where("sid","==",sid).where("folder","==",folder).orderBy("idx","asc")
-    .get().then(function(snap){
-      return snap.docs.map(function(d){ return {url:d.data().url,isVideo:d.data().isVideo}; });
-    }).catch(function(){ return []; });
-}
-
-// Media helpers
-function readFiles(files,key){
-  Array.from(files).forEach(function(f){
-    var r=new FileReader();
-    r.onload=function(ev){S[key].push({url:ev.target.result,isVideo:f.type.startsWith("video")});render()};
-    r.readAsDataURL(f);
-  });
-}
-function mgrid(items){
-  if(!items||!items.length)return"";
-  return'<div class="mgrid">'+items.map(function(it){
-    return'<div class="mth">'+(it.isVideo?'<video src="'+it.url+'" controls></video>':'<img src="'+it.url+'" loading="lazy">')+'</div>';
-  }).join("")+'</div>';
-}
-function novH(list){
-  return(list||[]).map(function(n){
-    return'<div class="nov"><b style="font-size:11px;color:'+G+'">'+esc(n.time)+'</b><div style="font-size:14px;margin-top:2px">'+esc(n.text)+'</div></div>';
-  }).join("");
-}
-function mbtns(key,c1,c2){
-  return'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">'+
-    '<label style="display:flex;align-items:center;justify-content:center;gap:5px;padding:11px;background:'+c1+';color:#fff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🎥 Video<input type="file" accept="video/*" multiple style="display:none" onchange="readFiles(this.files,\''+key+'\')"></label>'+
-    '<label style="display:flex;align-items:center;justify-content:center;gap:5px;padding:11px;background:#fff;color:'+c2+';border:2px solid '+c2+';border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📸 Foto<input type="file" accept="image/*" multiple style="display:none" onchange="readFiles(this.files,\''+key+'\')"></label>'+
-    '</div>';
-}
-function mediaSection(label,items){
-  if(!items||!items.length)return'<p style="color:#9ca3af;font-size:13px;text-align:center;padding:10px">Sin archivos</p>';
-  return items.map(function(it){
-    return it.isVideo
-      ?'<video src="'+it.url+'" class="media-full" controls playsinline></video>'
-      :'<img src="'+it.url+'" class="media-full" loading="lazy">';
-  }).join("");
-}
-
-// Acciones operario
-function goHome(){
-  clearInterval(S.tint);S.tint=null;
-  S.screen="home";S.who="";S.apt=null;S.t=0;S.novs=[];
-  S.emIn=[];S.emDan=[];S.emOut=[];S.modal=false;S.novForm=false;
-  S.sid=null;S.stime=null;S.lastRec=null;S.uploading=false;
-  render();
-}
-function startCleaning(){
-  if(!S.who||!S.apt)return;
-  S.stime=new Date();S.t=0;S.novs=[];S.emIn=[];S.emDan=[];S.emOut=[];
-  S.modal=false;S.novForm=false;S.screen="active";render();
-  db.collection("limpiezas").add({
-    worker:S.who,apt:aptL(S.apt),client:S.apt.client,valor:Number(S.apt.valor)||0,
-    startTime:firebase.firestore.Timestamp.fromDate(S.stime),
-    status:"active",novedades:[],entryCount:0,danosCount:0,exitCount:0,duration:0,
-    entryMedia:[],danosMedia:[],exitMedia:[]
-  }).then(function(r){S.sid=r.id}).catch(function(){});
-  clearInterval(S.tint);
-  S.tint=setInterval(function(){S.t++;var el=document.getElementById("tmr");if(el)el.textContent=fmt(S.t)},1000);
-}
-function addNov(){
-  var el=document.getElementById("novta");
-  if(!el||!el.value.trim())return;
-  S.novs.push({text:el.value.trim(),time:nowT()});
-  S.novForm=false;
-  if(S.sid)db.collection("limpiezas").doc(S.sid).update({novedades:S.novs}).catch(function(){});
-  render();
-}
-function finalizarLimpieza(){
-  clearInterval(S.tint);S.tint=null;
-  var end=new Date();
-  S.modal=false;S.uploading=true;S.uploadPct=0;
-  S.lastRec={who:S.who,apt:aptL(S.apt),client:S.apt.client,valor:Number(S.apt.valor)||0,
-    stime:S.stime,end:end,dur:S.t,novs:S.novs};
-  S.screen="summary";render();
-  var sid=S.sid;
-  var total=(S.emIn.length+S.emDan.length+S.emOut.length)||1;
-  var done=0;
-  function prog(){done++;S.uploadPct=Math.round(done/total*100);var el=document.getElementById("ubar");if(el)el.style.width=S.uploadPct+"%"}
-  Promise.all([
-    saveMediaGroup(S.emIn,sid,"entrada",aptL(S.apt)),
-    saveMediaGroup(S.emDan,sid,"danos",aptL(S.apt)),
-    saveMediaGroup(S.emOut,sid,"salida",aptL(S.apt))
-  ]).then(function(){
-    return db.collection("limpiezas").doc(sid).update({
-      status:"completed",
-      endTime:firebase.firestore.Timestamp.fromDate(end),
-      duration:S.t,novedades:S.novs,
-      entryCount:S.emIn.length,danosCount:S.emDan.length,exitCount:S.emOut.length
-    });
-  }).then(function(){
-    S.uploading=false;S.uploadPct=100;render();
-  }).catch(function(e){
-    db.collection("limpiezas").doc(sid).update({
-      status:"completed",endTime:firebase.firestore.Timestamp.fromDate(end),
-      duration:S.t,novedades:S.novs,
-      entryCount:S.emIn.length,danosCount:S.emDan.length,exitCount:S.emOut.length
-    }).catch(function(){});
-    S.uploading=false;render();
-    console.log("Error guardando media:",e);
-  });
-}
-
-// Login / sesion
-function tryLogin(){
-  var el=document.getElementById("pi");if(!el)return;
-  if(el.value===PASS_GER){S.role="ger";S.screen="ger";S.gTab="deuda";S.passErr="";saveSession();fetchRecs();clearInterval(S.poll);S.poll=setInterval(fetchRecs,15000);render();}
-  else if(el.value===PASS_ADM){S.role="adm";S.screen="adm";S.passErr="";saveSession();fetchRecs();clearInterval(S.poll);S.poll=setInterval(fetchRecs,15000);render();}
-  else{S.passErr="Contrasena incorrecta";render();setTimeout(function(){var i=document.getElementById("pi");if(i){i.value="";i.focus()}},50)}
-}
-function leavePanel(){
-  clearInterval(S.poll);S.poll=null;
-  S.role="";S.screen="home";S.passErr="";S.hFrom="";S.hTo="";S.fW="";S.fA="";S.fC="";S.recs=[];S.detalle=null;
-  clearSession();render();
-}
-
-// Gestión apartamentos
-function newApt(){S.aptForm={idx:-1,name:"",client:"",valor:0};render();setTimeout(function(){var el=document.getElementById("fn");if(el)el.focus()},100)}
-function editApt(idx){var a=S.apts[idx];S.aptForm={idx:idx,name:a.name,client:a.client,valor:a.valor};render();setTimeout(function(){var el=document.getElementById("fn");if(el)el.focus()},100)}
-function saveAptForm(){
-  var fn=document.getElementById("fn"),fc=document.getElementById("fc"),fv=document.getElementById("fv");
-  if(!fn||!fn.value.trim()){alert("El nombre es obligatorio");return}
-  var obj={name:fn.value.trim().toUpperCase(),client:fc?fc.value:"",valor:Number(fv?fv.value:0)||0};
-  var isNew=S.aptForm.idx===-1;
-  if(isNew)S.apts.push(obj);else S.apts[S.aptForm.idx]=obj;
-  S.aptForm=null;
-  saveApts(function(){alert(isNew?"✅ Apartamento creado":"✅ Apartamento actualizado");render()});
-}
-function cancelAptForm(){S.aptForm=null;render()}
-function delApt(idx){if(!confirm("¿Eliminar '"+S.apts[idx].name+"'?"))return;S.apts.splice(idx,1);saveApts(function(){render()})}
-
-// Gestión clientes
-function newClient(){
-  var el=document.getElementById("nc");if(!el||!el.value.trim())return;
-  var v=el.value.trim().toUpperCase();
-  if(S.clients.indexOf(v)>=0){alert("Ya existe");return}
-  S.clients.push(v);S.clients.sort();saveClients();el.value="";render();
-}
-function editClient(idx){S.ecIdx=idx;render();setTimeout(function(){var el=document.getElementById("ec");if(el){el.value=S.clients[idx];el.focus()}},100)}
-function saveClient(){
-  var el=document.getElementById("ec");if(!el||!el.value.trim())return;
-  var v=el.value.trim().toUpperCase(),old=S.clients[S.ecIdx];
-  S.clients[S.ecIdx]=v;S.clients.sort();
-  S.apts.forEach(function(a){if(a.client===old)a.client=v});
-  S.ecIdx=-1;saveClients();saveApts(function(){});render();
-}
-function cancelClient(){S.ecIdx=-1;render()}
-function delClient(idx){
-  var name=S.clients[idx],used=S.apts.filter(function(a){return a.client===name}).length;
-  if(!confirm("¿Eliminar '"+name+"'?"+(used>0?"\n⚠️ Tiene "+used+" apartamento(s)":"")))return;
-  S.clients.splice(idx,1);S.apts.forEach(function(a){if(a.client===name)a.client=""});
-  saveClients();saveApts(function(){});render();
-}
-
-// Gestión trabajadores
-function newWorker(){var el=document.getElementById("nw");if(!el||!el.value.trim())return;S.workers.push(el.value.trim());saveWorkers();el.value="";render()}
-function editWorker(idx){S.ewIdx=idx;render();setTimeout(function(){var el=document.getElementById("ew");if(el){el.value=S.workers[idx];el.focus()}},100)}
-function saveWorker(){var el=document.getElementById("ew");if(!el||!el.value.trim())return;S.workers[S.ewIdx]=el.value.trim();S.ewIdx=-1;saveWorkers();render()}
-function cancelWorker(){S.ewIdx=-1;render()}
-function delWorker(idx){if(!confirm("¿Eliminar '"+S.workers[idx]+"'?"))return;S.workers.splice(idx,1);saveWorkers();render()}
-
-function delRec(id,apt){
-  if(!confirm("¿Eliminar el registro de '"+apt+"'? Esta acción no se puede deshacer."))return;
-  db.collection("limpiezas").doc(id).delete().then(function(){
-    S.recs=S.recs.filter(function(r){return r.id!==id});
-    S.detalle=null;S.screen="ger";render();
-  }).catch(function(e){alert("Error: "+e.message)});
-}
-
-function verDetalle(id){
-  var r=S.recs.find(function(x){return x.id===id});
-  if(!r)return;
-  S.detalle=r;S.screen="detalle";
-  S.detalleMedia={entry:[],danos:[],out:[],loading:true};
-  render();
-  Promise.all([
-    loadMediaGroup(id,"entrada"),
-    loadMediaGroup(id,"danos"),
-    loadMediaGroup(id,"salida")
-  ]).then(function(res){
-    S.detalleMedia={entry:res[0],danos:res[1],out:res[2],loading:false};
-    render();
-  }).catch(function(){
-    S.detalleMedia={entry:[],danos:[],out:[],loading:false};
-    render();
-  });
-}
-
-// Render
-function render(){
-  var html="";
-  if(S.screen==="home")html=pgHome();
-  else if(S.screen==="login")html=pgLogin();
-  else if(S.screen==="active")html=pgActive();
-  else if(S.screen==="summary")html=pgSummary();
-  else if(S.screen==="adm")html=pgAdm();
-  else if(S.screen==="ger")html=pgGer();
-  else if(S.screen==="detalle")html=pgDetalle();
-  else html=pgHome();
-  document.getElementById("R").innerHTML='<div class="wrap">'+html+'</div>';
-}
-
-// Helpers UI
-function panelHdr(title,sub,color,btnLabel,btnAction){
-  btnLabel=btnLabel||"← Volver";btnAction=btnAction||"leavePanel()";
-  return'<div class="hdr"><button onclick="'+btnAction+'" class="back">'+btnLabel+'</button>'+
-    '<div style="text-align:right"><div style="font-size:18px;font-weight:800;color:'+(color||"#111827")+'">'+title+'</div>'+
-    '<div style="font-size:11px;color:#6b7280">'+sub+'</div></div></div>';
-}
-function filtros(extra){
-  var hasF=S.hFrom||S.hTo||S.fW||S.fA||S.fC;
-  return'<div class="card" style="padding:14px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:13px">🔍 Filtros</span>'+
-    (hasF?'<button onclick="S.hFrom=\'\';S.hTo=\'\';S.fW=\'\';S.fA=\'\';S.fC=\'\';render()" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Limpiar</button>':'')+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
-    '<div><label class="lbl">Desde</label><input type="date" class="inp" value="'+S.hFrom+'" onchange="S.hFrom=this.value;render()" style="margin:0"></div>'+
-    '<div><label class="lbl">Hasta</label><input type="date" class="inp" value="'+S.hTo+'" onchange="S.hTo=this.value;render()" style="margin:0"></div>'+
-    '</div>'+(extra||'')+'</div>';
-}
-function filterRecs(done){
-  return done.filter(function(r){
-    var d=td(r.endTime);
-    if(S.hFrom&&d<new Date(S.hFrom+" 00:00:00"))return false;
-    if(S.hTo&&d>new Date(S.hTo+" 23:59:59"))return false;
-    if(S.fW&&r.worker!==S.fW)return false;
-    if(S.fA&&r.apt!==S.fA)return false;
-    if(S.fC&&r.client!==S.fC)return false;
+function CleaningsTab({appData,update,showToast}){
+  const [fDate,setFDate]=useState("");
+  const [fEmp,setFEmp]=useState("");
+  const [fApt,setFApt]=useState("");
+  const [fClient,setFClient]=useState("");
+  const [fPaid,setFPaid]=useState("all");
+  const [editing,setEditing]=useState(null);
+  const filtered=appData.cleanings.filter(c=>{
+    if(fDate&&c.date!==fDate) return false;
+    if(fEmp&&!c.employeeName?.toLowerCase().includes(fEmp.toLowerCase())) return false;
+    if(fApt&&!c.apartmentName?.toLowerCase().includes(fApt.toLowerCase())) return false;
+    if(fClient&&!c.clientName?.toLowerCase().includes(fClient.toLowerCase())) return false;
+    if(fPaid==="paid"&&!c.paid) return false;
+    if(fPaid==="pending"&&c.paid) return false;
     return true;
+  }).sort((a,b)=>b.date!==a.date?b.date?.localeCompare(a.date):b.createdAt-a.createdAt);
+  const togglePaid=(id)=>{const found=appData.cleanings.find(c=>c.id===id);update("cleanings",appData.cleanings.map(c=>c.id===id?{...c,paid:!c.paid}:c));showToast(found?.paid?"Marcado como pendiente":"Marcado como pagado ✅");};
+  const del=(id)=>{if(!window.confirm("¿Eliminar este registro?"))return;update("cleanings",appData.cleanings.filter(c=>c.id!==id));showToast("Registro eliminado","error");};
+  const saveEdit=(form)=>{update("cleanings",appData.cleanings.map(c=>c.id===form.id?{...form}:c));setEditing(null);showToast("Registro actualizado ✅");};
+  const total=filtered.reduce((s,c)=>s+(c.amount||0),0);
+  const totalPaid=filtered.filter(c=>c.paid).reduce((s,c)=>s+(c.amount||0),0);
+  return(
+    <div>
+      {editing&&<EditModal cleaning={editing} appData={appData} onSave={saveEdit} onClose={()=>setEditing(null)}/>}
+      <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Todos los registros</h2>
+      <Card style={{marginBottom:20}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
+          <div><Lbl>Fecha</Lbl><Inp type="date" value={fDate} onChange={setFDate}/></div>
+          <div><Lbl>Encargado</Lbl><Inp value={fEmp} onChange={setFEmp} placeholder="Buscar..."/></div>
+          <div><Lbl>Apartamento</Lbl><Inp value={fApt} onChange={setFApt} placeholder="Buscar..."/></div>
+          <div><Lbl>Cliente</Lbl><Inp value={fClient} onChange={setFClient} placeholder="Buscar..."/></div>
+          <div><Lbl>Estado</Lbl><Sel value={fPaid} onChange={setFPaid}><option value="all">Todos</option><option value="paid">Pagados</option><option value="pending">Pendientes</option></Sel></div>
+        </div>
+        <div style={{marginTop:12,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+          <span style={{color:C.muted,fontSize:13}}>{filtered.length} registro{filtered.length!==1?"s":""}</span>
+          <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+            <span style={{color:C.muted,fontSize:13}}>Total: <strong style={{color:C.text}}>{fmtCOP(total)}</strong></span>
+            <span style={{color:C.muted,fontSize:13}}>Cobrado: <strong style={{color:C.success}}>{fmtCOP(totalPaid)}</strong></span>
+            <span style={{color:C.muted,fontSize:13}}>Pendiente: <strong style={{color:C.danger}}>{fmtCOP(total-totalPaid)}</strong></span>
+          </div>
+        </div>
+      </Card>
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{background:C.surface}}>{["Fecha","Encargado","Apartamento","Cliente","Notas","Valor","Estado",""].map((h,i)=><th key={i} style={{textAlign:"left",padding:"12px 16px",color:C.muted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+            <tbody>
+              {filtered.length===0?<tr><td colSpan={8} style={{textAlign:"center",padding:40,color:C.muted}}>Sin registros</td></tr>
+              :filtered.map(c=>(
+                <tr key={c.id} style={{borderTop:`1px solid ${C.border}`}}>
+                  <td style={{padding:"12px 16px",color:C.muted,whiteSpace:"nowrap"}}>{fmtDate(c.date)}</td>
+                  <td style={{padding:"12px 16px",fontWeight:700}}>{c.employeeName}</td>
+                  <td style={{padding:"12px 16px"}}>{c.apartmentName}</td>
+                  <td style={{padding:"12px 16px",color:C.info,fontWeight:600}}>{c.clientName||"—"}</td>
+                  <td style={{padding:"12px 16px",color:C.muted,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes||"—"}</td>
+                  <td style={{padding:"12px 16px",color:C.accent,fontWeight:800,whiteSpace:"nowrap"}}>{fmtCOP(c.amount)}</td>
+                  <td style={{padding:"12px 16px"}}><Badge paid={c.paid}/></td>
+                  <td style={{padding:"12px 16px"}}><div style={{display:"flex",gap:6}}>
+                    <Btn variant="info" size="sm" onClick={()=>setEditing(c)}>✏️</Btn>
+                    <Btn variant={c.paid?"ghost":"success"} size="sm" onClick={()=>togglePaid(c.id)}>{c.paid?"↩":"✓"}</Btn>
+                    <Btn variant="danger" size="sm" onClick={()=>del(c.id)}>✕</Btn>
+                  </div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ClientsTab({appData,update,showToast}){
+  const [search,setSearch]=useState("");
+  const [filterStatus,setFilterStatus]=useState("all");
+  const [expanded,setExpanded]=useState(null);
+  const grouped={};
+  appData.cleanings.forEach(c=>{
+    const key=c.clientName||"Sin cliente";
+    if(!grouped[key]) grouped[key]={clientName:key,apartments:new Set(),cleanings:[],total:0,paid:0,owed:0};
+    grouped[key].cleanings.push(c);
+    grouped[key].apartments.add(c.apartmentName);
+    grouped[key].total+=c.amount||0;
+    if(c.paid) grouped[key].paid+=c.amount||0;
+    else grouped[key].owed+=c.amount||0;
   });
+  const rows=Object.entries(grouped).filter(([k])=>k.toLowerCase().includes(search.toLowerCase())).filter(([,g])=>{if(filterStatus==="owed") return g.owed>0;if(filterStatus==="paid") return g.owed===0;return true;}).sort((a,b)=>b[1].owed-a[1].owed);
+  const gTotal=rows.reduce((s,[,g])=>s+g.total,0);
+  const gPaid=rows.reduce((s,[,g])=>s+g.paid,0);
+  const gOwed=rows.reduce((s,[,g])=>s+g.owed,0);
+  const markAllPaid=(key)=>{const g=grouped[key];const ids=g.cleanings.filter(c=>!c.paid).map(c=>c.id);update("cleanings",appData.cleanings.map(c=>ids.includes(c.id)?{...c,paid:true}:c));showToast(`Todo pagado para ${key} ✅`);};
+  const toggleOne=(id)=>update("cleanings",appData.cleanings.map(c=>c.id===id?{...c,paid:!c.paid}:c));
+  return(
+    <div>
+      <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Estado por cliente</h2>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:24}}>
+        {[{label:"Total facturado",color:C.text,value:fmtCOP(gTotal)},{label:"Total cobrado",color:C.success,value:fmtCOP(gPaid)},{label:"Por cobrar",color:C.danger,value:fmtCOP(gOwed)}].map(s=>(
+          <Card key={s.label} style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div><div style={{fontSize:12,color:C.muted,marginTop:4}}>{s.label}</div></Card>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:200}}><Inp value={search} onChange={setSearch} placeholder="🔍 Buscar cliente..."/></div>
+        <Sel value={filterStatus} onChange={setFilterStatus} style={{width:"auto",minWidth:180}}><option value="all">Todos</option><option value="owed">Con deuda</option><option value="paid">Sin deuda</option></Sel>
+      </div>
+      {rows.length===0?<Card style={{textAlign:"center",color:C.muted,padding:40}}>No hay datos</Card>
+      :rows.map(([key,g])=>{
+        const isExp=expanded===key;
+        return(
+          <Card key={key} style={{marginBottom:12}}>
+            <div onClick={()=>setExpanded(isExp?null:key)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",flexWrap:"wrap",gap:12}}>
+              <div>
+                <div style={{fontWeight:800,fontSize:16}}>{key}</div>
+                <div style={{color:C.muted,fontSize:12,marginTop:2}}>{g.cleanings.length} limpieza{g.cleanings.length!==1?"s":""} · {[...g.apartments].join(", ")}</div>
+              </div>
+              <div style={{display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{textAlign:"right"}}><div style={{fontSize:11,color:C.muted}}>Cobrado</div><div style={{fontWeight:800,color:C.success,fontSize:15}}>{fmtCOP(g.paid)}</div></div>
+                <div style={{textAlign:"right"}}><div style={{fontSize:11,color:C.muted}}>Por cobrar</div><div style={{fontWeight:800,color:g.owed>0?C.danger:C.muted,fontSize:15}}>{fmtCOP(g.owed)}</div></div>
+                {g.owed>0&&<Btn variant="success" size="sm" onClick={e=>{e.stopPropagation();markAllPaid(key);}}>✓ Pagar todo</Btn>}
+                <span style={{color:C.muted}}>{isExp?"▲":"▼"}</span>
+              </div>
+            </div>
+            {isExp&&(
+              <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:16}}>
+                {g.cleanings.sort((a,b)=>b.date?.localeCompare(a.date)).map(c=>(
+                  <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600}}>{fmtDate(c.date)} — <span style={{color:C.muted,fontWeight:400}}>{c.apartmentName}</span></div>
+                      <div style={{fontSize:11,color:C.muted,marginTop:2}}>{c.employeeName}{c.notes?` · ${c.notes}`:""}</div>
+                    </div>
+                    <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                      <span style={{color:C.accent,fontWeight:800,fontSize:13}}>{fmtCOP(c.amount)}</span>
+                      <button onClick={()=>toggleOne(c.id)} style={{padding:"4px 12px",border:"none",borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:c.paid?"#14532d":"#450a0a",color:c.paid?C.success:C.danger}}>{c.paid?"✓ Pagado":"Pendiente"}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
 }
 
-// ══ HOME ══════════════════════════════════════════════════════════════
-function pgHome(){
-  var sorted=S.apts.slice().sort(function(a,b){return a.name.localeCompare(b.name)});
-  var ao=sorted.map(function(a){var l=aptL(a);var sel=S.apt&&aptL(S.apt)===l;
-    return'<option value="'+esc(l)+'"'+(sel?" selected":"")+'>'+esc(a.name)+' — '+esc(a.client)+'</option>'}).join("");
-  var wo=S.workers.map(function(w){return'<option value="'+esc(w)+'"'+(S.who===w?" selected":"")+'>'+esc(w)+'</option>'}).join("");
-  var info=S.apt?'<div style="background:#f0fdf4;border-radius:9px;padding:10px 12px;margin-bottom:8px"><span style="color:'+G+';font-weight:700;font-size:13px">Cliente: '+esc(S.apt.client)+'</span></div>':"";
-  var panelBtn=S.role==="ger"?'<button class="btn" onclick="S.screen=\'ger\';render()" style="background:'+PU+';margin-top:0">👑 Volver a Gerencia</button>':
-    S.role==="adm"?'<button class="btn" onclick="S.screen=\'adm\';render()" style="background:'+B+';margin-top:0">👨‍💼 Volver al Panel Admin</button>':
-    '<button class="btn" onclick="S.screen=\'login\';S.passErr=\'\';render()" style="background:'+B+';margin-top:0">🔐 Acceso Panel</button>';
-  return'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:18px 0 14px">'+
-    '<div><div style="font-size:38px">🧹</div><h1 style="font-size:21px;font-weight:800;color:#111827;margin:6px 0 2px">Control de Limpieza</h1></div></div>'+
-    '<div class="card">'+
-    '<label class="lbl">Trabajador</label>'+
-    '<select class="inp" onchange="S.who=this.value;render()"><option value="">Seleccionar trabajador...</option>'+wo+'</select>'+
-    '<label class="lbl">Apartamento</label>'+
-    '<select class="inp" onchange="(function(v){S.apt=S.apts.find(function(x){return aptL(x)===v})||null;render()})(this.value)"><option value="">Seleccionar apartamento...</option>'+ao+'</select>'+
-    info+
-    '<button class="btn" onclick="startCleaning()" style="background:'+(S.who&&S.apt?G:GR)+'">▶ Iniciar Limpieza</button></div>'+
-    panelBtn;
+function ConfigTab({appData,update,showToast}){
+  const [sec,setSec]=useState("apartments");
+  const [nAptNum,setNAptNum]=useState("");
+  const [nBuilding,setNBuilding]=useState("");
+  const [nClient,setNClient]=useState("");
+  const [nPrice,setNPrice]=useState("");
+  const [aptSearch,setAptSearch]=useState("");
+  const [newEmp,setNewEmp]=useState("");
+  const [newAdminPw,setNewAdminPw]=useState("");
+  const [newEmpPw,setNewEmpPw]=useState("");
+  // Local editable copy of apartments
+  const [localApts,setLocalApts]=useState(()=>appData.apartments);
+  const [aptsDirty,setAptsDirty]=useState(false);
+  useEffect(()=>{ setLocalApts(appData.apartments); },[appData.apartments.length]);
+  const buildings=[...new Set(appData.apartments.map(a=>a.building).filter(Boolean))].sort();
+  const clients=[...new Set(appData.apartments.map(a=>a.clientName).filter(Boolean))].sort();
+  const addApt=()=>{
+    if(!nBuilding.trim()){showToast("El edificio es requerido","error");return;}
+    const num=nAptNum.trim(),bld=nBuilding.trim();
+    const displayName=num?`${num} ${bld}`:bld;
+    const newApt={id:uid(),aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:parseInt(nPrice)||0};
+    const updated=[...localApts,newApt];
+    setLocalApts(updated);
+    update("apartments",updated);
+    setNAptNum("");setNBuilding("");setNClient("");setNPrice("");
+    showToast(`${displayName} agregado ✅`);
+  };
+  const delApt=(id)=>{
+    const updated=localApts.filter(a=>a.id!==id);
+    setLocalApts(updated);
+    update("apartments",updated);
+    showToast("Apartamento eliminado","error");
+  };
+  const updLocalApt=(id,field,val)=>{
+    setLocalApts(prev=>prev.map(a=>{
+      if(a.id!==id) return a;
+      const u={...a,[field]:field==="price"?val:val};
+      u.displayName=u.aptNumber?`${u.aptNumber} ${u.building}`:u.building;
+      return u;
+    }));
+    setAptsDirty(true);
+  };
+  const saveApts=()=>{
+    const normalized=localApts.map(a=>({...a,price:parseInt(a.price)||0}));
+    update("apartments",normalized);
+    setAptsDirty(false);
+    showToast("Apartamentos guardados ✅");
+  };
+  const addEmp=()=>{if(!newEmp.trim())return;update("employees",[...appData.employees,newEmp.trim().toUpperCase()]);setNewEmp("");showToast("Encargado agregado ✅");};
+  const delEmp=(name)=>{update("employees",appData.employees.filter(e=>e!==name));showToast("Eliminado","error");};
+  const savePws=()=>{const s={...appData.settings};if(newAdminPw)s.adminPassword=newAdminPw;if(newEmpPw)s.empPassword=newEmpPw;update("settings",s);setNewAdminPw("");setNewEmpPw("");showToast("Contraseñas guardadas ✅");};
+  const filteredApts=localApts.filter(a=>a.displayName.toLowerCase().includes(aptSearch.toLowerCase())||a.clientName?.toLowerCase().includes(aptSearch.toLowerCase())).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+  const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
+  return(
+    <div>
+      <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Configuración</h2>
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+        {[["apartments","🏠 Apartamentos"],["employees","👤 Encargados"],["passwords","🔐 Contraseñas"],["backup","💾 Backup"]].map(([id,label])=>(
+          <Btn key={id} variant={sec===id?"primary":"ghost"} onClick={()=>setSec(id)}>{label}</Btn>
+        ))}
+      </div>
+      {sec==="apartments"&&(
+        <div>
+          <Card style={{marginBottom:16}}>
+            <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:700}}>➕ Nuevo apartamento</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div><Lbl>Número de apto</Lbl><Inp value={nAptNum} onChange={setNAptNum} placeholder="Ej: 303"/></div>
+              <div><Lbl>Edificio *</Lbl><input list="blist" value={nBuilding} onChange={e=>setNBuilding(e.target.value)} placeholder="Ej: Monserrate" style={inpStyle}/><datalist id="blist">{buildings.map(b=><option key={b} value={b}/>)}</datalist></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+              <div><Lbl>Cliente</Lbl><input list="clist" value={nClient} onChange={e=>setNClient(e.target.value)} placeholder="Ej: Veronica" style={inpStyle}/><datalist id="clist">{clients.map(cl=><option key={cl} value={cl}/>)}</datalist></div>
+              <div><Lbl>Precio (COP)</Lbl><Inp type="number" value={nPrice} onChange={setNPrice} placeholder="50000"/></div>
+            </div>
+            <Btn onClick={addApt} style={{width:"100%"}}>+ Agregar</Btn>
+          </Card>
+          <div style={{display:"flex",gap:10,marginBottom:12,alignItems:"center"}}>
+            <div style={{flex:1}}><Inp value={aptSearch} onChange={setAptSearch} placeholder="🔍 Buscar apartamento o cliente..."/></div>
+            {aptsDirty&&<Btn variant="success" onClick={saveApts}>💾 Guardar cambios</Btn>}
+          </div>
+          <Card style={{padding:0,overflow:"hidden"}}>
+            <div style={{maxHeight:460,overflowY:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr style={{background:C.surface,position:"sticky",top:0}}>{["Apartamento","Edificio","Cliente","Precio",""].map((h,i)=><th key={i} style={{textAlign:"left",padding:"12px 16px",color:C.muted,fontWeight:700}}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {filteredApts.map(a=>(
+                    <tr key={a.id} style={{borderTop:`1px solid ${C.border}`}}>
+                      <td style={{padding:"10px 16px",fontWeight:700}}>{a.displayName}</td>
+                      <td style={{padding:"10px 16px"}}><input value={a.building||""} onChange={e=>updLocalApt(a.id,"building",e.target.value)} style={{width:110,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/></td>
+                      <td style={{padding:"10px 16px"}}><input value={a.clientName||""} onChange={e=>updLocalApt(a.id,"clientName",e.target.value)} style={{width:100,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.info,fontSize:12,fontFamily:"inherit",outline:"none",fontWeight:600}}/></td>
+                      <td style={{padding:"10px 16px"}}><input type="number" value={a.price} onChange={e=>updLocalApt(a.id,"price",e.target.value)} style={{width:90,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.accent,fontSize:12,fontWeight:800,fontFamily:"inherit",outline:"none"}}/></td>
+                      <td style={{padding:"10px 16px",textAlign:"right"}}><Btn variant="danger" size="sm" onClick={()=>delApt(a.id)}>✕</Btn></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+      {sec==="employees"&&(
+        <div>
+          <Card style={{marginBottom:16}}>
+            <h3 style={{margin:"0 0 14px",fontSize:15,fontWeight:700}}>Agregar encargado</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"end"}}>
+              <div><Lbl>Nombre</Lbl><Inp value={newEmp} onChange={setNewEmp} placeholder="Nombre completo"/></div>
+              <Btn onClick={addEmp}>+ Agregar</Btn>
+            </div>
+          </Card>
+          <Card>{appData.employees.map(e=><div key={e} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontWeight:600}}>👤 {e}</span><Btn variant="danger" size="sm" onClick={()=>delEmp(e)}>✕ Eliminar</Btn></div>)}</Card>
+        </div>
+      )}
+      {sec==="passwords"&&(
+        <Card style={{maxWidth:420}}>
+          <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:700}}>Cambiar contraseñas</h3>
+          <div style={{marginBottom:14}}><Lbl>Nueva contraseña Admin</Lbl><Inp type="password" value={newAdminPw} onChange={setNewAdminPw} placeholder="Dejar vacío para no cambiar"/></div>
+          <div style={{marginBottom:20}}><Lbl>Nueva contraseña Encargados</Lbl><Inp type="password" value={newEmpPw} onChange={setNewEmpPw} placeholder="Dejar vacío para no cambiar"/></div>
+          <Btn onClick={savePws} style={{width:"100%"}}>Guardar</Btn>
+          <div style={{marginTop:14,padding:12,background:C.surface,borderRadius:8,fontSize:12,color:C.muted}}>
+            Admin: <code style={{color:C.accent}}>{appData.settings.adminPassword}</code>&nbsp;&nbsp;
+            Encargados: <code style={{color:C.accent}}>{appData.settings.empPassword}</code>
+          </div>
+        </Card>
+      )}
+      {sec==="backup"&&<BackupSection appData={appData} update={update} showToast={showToast}/>}
+    </div>
+  );
 }
 
-// ══ LOGIN ══════════════════════════════════════════════════════════════
-function pgLogin(){
-  return'<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:75vh">'+
-    '<div style="font-size:52px;margin-bottom:16px">🔐</div>'+
-    '<h2 style="font-size:21px;font-weight:800;margin-bottom:6px">Acceso al Panel</h2>'+
-    '<p style="color:#6b7280;font-size:14px;margin-bottom:24px">Administrador o Gerencia</p>'+
-    '<div class="card" style="width:100%"><label class="lbl">Contrasena</label>'+
-    '<input id="pi" type="password" class="inp" placeholder="••••••••" style="font-size:18px;letter-spacing:4px" onkeydown="if(event.key===\'Enter\')tryLogin()">'+
-    (S.passErr?'<div style="color:'+R+';font-size:13px;margin-bottom:8px;font-weight:600">⚠️ '+esc(S.passErr)+'</div>':'')+
-    '<button class="btn" onclick="tryLogin()" style="background:'+B+';margin-top:4px">Entrar</button></div>'+
-    '<button onclick="S.screen=\'home\';S.passErr=\'\';render()" style="background:none;border:none;color:#6b7280;margin-top:16px;cursor:pointer;font-size:14px;font-family:inherit">← Volver</button></div>';
-}
+function App(){
+  const [appData,setAppData]=useState(null);
+  const [view,setView]=useState("login");
+  const [loading,setLoading]=useState(true);
+  const [loginRole,setLoginRole]=useState("employee");
+  const [pw,setPw]=useState("");
+  const [loginError,setLoginError]=useState("");
+  const [adminTab,setAdminTab]=useState("dashboard");
+  const [toast,setToast]=useState(null);
+  const saveTimer=useRef(null);
 
-// ══ ACTIVO ══════════════════════════════════════════════════════════════
-function pgActive(){
-  var a=S.apt||{};
-  var nf=S.novForm?
-    '<textarea id="novta" class="inp" placeholder="Escribir novedad..." style="height:90px;resize:none;margin-top:6px"></textarea>'+
-    '<button class="btn" onclick="addNov()" style="background:'+G+';margin-top:6px;padding:10px">✅ Guardar</button>'+
-    '<button class="btn" onclick="S.novForm=false;render()" style="background:'+GR+';margin-top:6px;padding:10px">Cancelar</button>':
-    '<button class="btn" onclick="S.novForm=true;render()" style="background:'+O+';margin-top:0;padding:10px">➕ Agregar Novedad</button>';
-  var modal=S.modal?
-    '<div class="overlay"><div class="sheet">'+
-    '<div style="text-align:center;margin-bottom:16px"><h3 style="font-size:18px">🚪 Evidencia de Salida</h3><p style="color:#6b7280;font-size:13px;margin-top:4px">Graba el estado final del apartamento</p></div>'+
-    mbtns("emOut",G,G)+mgrid(S.emOut)+
-    '<button class="btn" onclick="finalizarLimpieza()" style="background:'+R+';padding:14px;margin-top:14px">✅ Confirmar Finalización</button>'+
-    '<button class="btn" onclick="S.modal=false;render()" style="background:'+GR+';margin-top:8px">Cancelar</button></div></div>':"";
-  return'<div class="hdr"><button onclick="if(confirm(\'¿Cancelar la limpieza en curso?\'))goHome()" class="back">← Cancelar</button>'+
-    '<div style="font-size:13px;color:#6b7280;font-weight:600">Limpieza en progreso</div></div>'+
-    '<div style="background:linear-gradient(135deg,'+G+',#15803d);border-radius:18px;padding:22px;color:#fff;margin-bottom:14px;text-align:center">'+
-    '<div style="font-size:11px;font-weight:700;opacity:.8;letter-spacing:.1em;margin-bottom:5px">EN CURSO</div>'+
-    '<div style="font-size:20px;font-weight:800">'+esc(a.name||"")+'</div>'+
-    '<div style="font-size:13px;opacity:.8;margin-bottom:10px">'+esc(a.client||"")+'</div>'+
-    '<div style="font-size:14px;opacity:.85;margin-bottom:10px">👤 '+esc(S.who)+'</div>'+
-    '<div id="tmr" style="font-size:52px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:3px;line-height:1">'+fmt(S.t)+'</div>'+
-    '<div style="font-size:12px;opacity:.7;margin-top:7px">'+(S.stime?"Inicio: "+fH(S.stime):"")+'</div></div>'+
-    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:15px">🚪 Evidencia de Entrada</span><span class="chip" style="background:#eff6ff;color:'+B+'">'+S.emIn.length+'</span></div>'+
-    mbtns("emIn",B,B)+mgrid(S.emIn)+'</div>'+
-    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
-    '<span style="font-weight:700;font-size:15px">📝 Novedades</span><span class="chip" style="background:#fef3c7;color:'+O+'">'+S.novs.length+'</span></div>'+
-    novH(S.novs)+nf+'</div>'+
-    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-weight:700;font-size:15px">⚠️ Evidencia de Daños</span><span class="chip" style="background:#fff1f2;color:'+R+'">'+S.emDan.length+'</span></div>'+
-    '<label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:'+R+';color:#fff;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">📸 Fotografiar Daño'+
-    '<input type="file" accept="image/*" multiple style="display:none" onchange="readFiles(this.files,\'emDan\')"></label>'+
-    mgrid(S.emDan)+'</div>'+
-    '<button class="btn" onclick="S.modal=true;render()" style="background:'+R+';padding:15px;font-size:16px;margin-top:4px">⏹ Finalizar Limpieza</button>'+modal;
-}
+  const isRemoteUpdate = useRef(false);
 
-// ══ RESUMEN ══════════════════════════════════════════════════════════════
-function pgSummary(){
-  var r=S.lastRec;if(!r)return"";
-  var uploadSection=S.uploading?
-    '<div class="card" style="text-align:center">'+
-    '<div style="font-size:14px;font-weight:700;color:'+B+';margin-bottom:8px">📤 Subiendo archivos a la nube...</div>'+
-    '<div class="upload-bar"><div id="ubar" class="upload-fill" style="width:'+S.uploadPct+'%"></div></div>'+
-    '<div style="font-size:12px;color:#6b7280;margin-top:6px">'+S.uploadPct+'% completado</div></div>':
-    '<div class="card" style="text-align:center;background:#f0fdf4">'+
-    '<div style="font-size:15px;font-weight:700;color:'+G+'">✅ Archivos guardados en la nube</div></div>';
-  return'<div class="hdr"><button onclick="goHome()" class="back">← Inicio</button>'+
-    '<div style="font-size:15px;font-weight:700;color:'+G+'">¡Limpieza Completada!</div></div>'+
-    '<div style="text-align:center;padding:8px 0 12px"><div style="font-size:56px">✅</div></div>'+
-    '<div class="card">'+
-    [["👤 Trabajador",r.who],["🏠 Apartamento",r.apt],["🏢 Cliente",r.client],
-     ["⏱ Duración",fmt(r.dur)],["🕐 Inicio",fH(r.stime)],["🕐 Fin",fH(r.end)]]
-    .map(function(x,i,a){return'<div class="row" style="'+(i===a.length-1?"border:none":"")+'"><span style="font-size:14px;color:#6b7280">'+x[0]+'</span><span style="font-weight:700">'+esc(String(x[1]||""))+'</span></div>'}).join("")+'</div>'+
-    uploadSection+
-    (r.novs&&r.novs.length?'<div class="card"><div style="font-weight:700;margin-bottom:10px">📝 Novedades</div>'+novH(r.novs)+'</div>':'')+
-    '<button class="btn" onclick="goHome()" style="background:'+G+';padding:14px;font-size:16px;margin-top:0">🏠 Nueva Limpieza</button>';
-}
-
-// ══ DETALLE ══════════════════════════════════════════════════════════════
-function pgDetalle(){
-  var r=S.detalle;if(!r)return"";
-  var origen=S.role==="ger"?"ger":"adm";
-  var eM=r.entryMedia||[];var dM=r.danosMedia||[];var xM=r.exitMedia||[];
-  return'<div class="hdr">'+
-    '<button onclick="S.screen=\''+origen+'\';S.detalle=null;render()" class="back">← Volver</button>'+
-    '<div><div style="font-size:17px;font-weight:800">Detalle de Limpieza</div>'+
-    '<div style="font-size:11px;color:#6b7280">'+fD(td(r.endTime))+'</div></div></div>'+
-
-    '<div style="background:linear-gradient(135deg,'+G+',#15803d);border-radius:16px;padding:20px;color:#fff;margin-bottom:12px">'+
-    '<div style="font-size:20px;font-weight:900;margin-bottom:4px">'+esc(r.apt)+'</div>'+
-    (r.client?'<span class="chip" style="background:rgba(255,255,255,.2);color:#fff;margin-bottom:8px;display:inline-block">'+esc(r.client)+'</span>':'')+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">'+
-    '<div style="background:rgba(0,0,0,.2);border-radius:10px;padding:10px;text-align:center">'+
-    '<div style="font-size:10px;opacity:.8;margin-bottom:2px">TRABAJADOR</div>'+
-    '<div style="font-size:13px;font-weight:700">'+esc(r.worker)+'</div></div>'+
-    '<div style="background:rgba(0,0,0,.2);border-radius:10px;padding:10px;text-align:center">'+
-    '<div style="font-size:10px;opacity:.8;margin-bottom:2px">DURACIÓN</div>'+
-    '<div style="font-size:18px;font-weight:900">'+fmt(r.duration||0)+'</div></div>'+
-    '<div style="background:rgba(0,0,0,.2);border-radius:10px;padding:10px;text-align:center">'+
-    '<div style="font-size:10px;opacity:.8;margin-bottom:2px">INICIO</div>'+
-    '<div style="font-size:14px;font-weight:700">'+fH(td(r.startTime))+'</div></div>'+
-    '<div style="background:rgba(0,0,0,.2);border-radius:10px;padding:10px;text-align:center">'+
-    '<div style="font-size:10px;opacity:.8;margin-bottom:2px">FIN</div>'+
-    '<div style="font-size:14px;font-weight:700">'+fH(td(r.endTime))+'</div></div>'+
-    '</div></div>'+
-
-    (S.role==="ger"&&r.valor>0?
-    '<div style="background:linear-gradient(135deg,'+PU+',#5b21b6);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'+
-    '<span style="color:rgba(255,255,255,.85);font-size:14px;font-weight:700">💰 Valor del Servicio</span>'+
-    '<span style="color:#fff;font-size:26px;font-weight:900">'+pesos(r.valor)+'</span></div>':'')+
-
-    // Novedades
-    '<div class="card">'+
-    '<div style="font-weight:700;font-size:15px;margin-bottom:12px">📝 Novedades '+(r.novedades&&r.novedades.length?"("+r.novedades.length+")":"")+'</div>'+
-    (r.novedades&&r.novedades.length?novH(r.novedades):
-    '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:8px">Sin novedades registradas</p>')+
-    '</div>'+
-
-    // Entrada
-    '<div class="card">'+
-    '<div style="font-weight:700;font-size:15px;margin-bottom:4px">🚪 Evidencia de Entrada</div>'+
-    '<div style="font-size:12px;color:#6b7280;margin-bottom:10px">'+(r.entryCount||0)+' archivo(s) · Videos y fotos del estado inicial</div>'+
-    mediaSection("entrada",eM)+'</div>'+
-
-    // Daños
-    '<div class="card">'+
-    '<div style="font-weight:700;font-size:15px;margin-bottom:4px">⚠️ Evidencia de Daños</div>'+
-    '<div style="font-size:12px;color:#6b7280;margin-bottom:10px">'+(r.danosCount||0)+' foto(s)</div>'+
-    mediaSection("danos",dM)+'</div>'+
-
-    // Salida
-    '<div class="card">'+
-    '<div style="font-weight:700;font-size:15px;margin-bottom:4px">🏁 Evidencia de Salida</div>'+
-    '<div style="font-size:12px;color:#6b7280;margin-bottom:10px">'+(r.exitCount||0)+' archivo(s) · Videos y fotos del estado final</div>'+
-    mediaSection("salida",xM)+'</div>'+
-
-    (S.role==="ger"?
-    '<button onclick="delRec(\''+r.id+'\',\''+esc(r.apt)+'\')" class="btn" style="background:#fff1f2;color:'+R+';border:2px solid '+R+';margin-top:4px">🗑️ Eliminar este registro</button>':'');
-}
-
-// ══ ADMIN ══════════════════════════════════════════════════════════════
-function pgAdm(){
-  var done=S.recs.filter(function(r){return r.status==="completed"});
-  var live=S.recs.filter(function(r){return r.status==="active"});
-  var ts=new Date().toDateString();
-  var hoy=done.filter(function(r){return td(r.endTime).toDateString()===ts});
-  var avg=hoy.length?Math.round(hoy.reduce(function(a,r){return a+(r.duration||0)},0)/hoy.length):0;
-  var workers=[];done.forEach(function(r){if(r.worker&&workers.indexOf(r.worker)<0)workers.push(r.worker)});workers.sort();
-  var apts=[];done.forEach(function(r){if(r.apt&&apts.indexOf(r.apt)<0)apts.push(r.apt)});apts.sort();
-  var fil=filterRecs(done);
-  var wSel='<select class="inp" onchange="S.fW=this.value;render()" style="margin-bottom:8px">'+
-    '<option value="">Todos los trabajadores</option>'+workers.map(function(w){return'<option value="'+esc(w)+'"'+(S.fW===w?" selected":"")+'>'+esc(w)+'</option>'}).join("")+'</select>';
-  var aSel='<select class="inp" onchange="S.fA=this.value;render()" style="margin-bottom:0">'+
-    '<option value="">Todos los apartamentos</option>'+apts.map(function(a){return'<option value="'+esc(a)+'"'+(S.fA===a?" selected":"")+'>'+esc(a)+'</option>'}).join("")+'</select>';
-  var liveH=live.map(function(r){
-    return'<div class="ac" style="border-left-color:'+G+';background:#f0fdf4;cursor:default">'+
-      '<div style="display:flex;justify-content:space-between">'+
-      '<div><div style="font-weight:700;font-size:15px">'+esc(r.apt)+'</div>'+
-      (r.client?'<span class="chip" style="background:#dcfce7;color:'+G+'">'+esc(r.client)+'</span>':'')+
-      '<div style="font-size:13px;color:#6b7280;margin-top:5px">👤 '+esc(r.worker)+'</div></div>'+
-      '<span class="chip" style="background:#dcfce7;color:'+G+'">● ACTIVO</span></div>'+
-      (r.novedades&&r.novedades.length?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #bbf7d0">'+novH(r.novedades)+'</div>':'')+
-      '</div>';
-  }).join("");
-  var doneH=fil.map(function(r){
-    return'<div class="ac" onclick="verDetalle(\''+r.id+'\')">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
-      '<div><div style="font-weight:700;font-size:15px">'+esc(r.apt)+'</div>'+
-      (r.client?'<span class="chip" style="background:#eff6ff;color:'+B+'">'+esc(r.client)+'</span>':'')+
-      '<div style="font-size:13px;color:#6b7280;margin-top:5px">👤 '+esc(r.worker)+'</div>'+
-      '<div style="font-size:12px;color:#9ca3af;margin-top:2px">'+fD(td(r.endTime))+' · '+fH(td(r.startTime))+'–'+fH(td(r.endTime))+'</div></div>'+
-      '<div style="text-align:right"><div style="font-weight:900;color:'+G+';font-size:18px">'+fmt(r.duration||0)+'</div>'+
-      '<div style="font-size:11px;color:#9ca3af">'+((r.entryCount||0)+(r.danosCount||0)+(r.exitCount||0))+' arch · '+(r.novedades?r.novedades.length:0)+' nov</div>'+
-      '<div style="font-size:11px;color:'+B+';font-weight:700;margin-top:4px">Ver detalle →</div></div></div></div>';
-  }).join("");
-  return panelHdr("👨‍💼 Panel Admin","Tiempo real")+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
-    '<div class="sbox"><div style="font-size:26px;font-weight:900;color:'+G+'">'+live.length+'</div><div style="font-size:10px;color:#6b7280;font-weight:700;margin-top:2px">EN CURSO</div></div>'+
-    '<div class="sbox"><div style="font-size:26px;font-weight:900;color:'+B+'">'+hoy.length+'</div><div style="font-size:10px;color:#6b7280;font-weight:700;margin-top:2px">HOY</div></div>'+
-    '<div class="sbox"><div style="font-size:16px;font-weight:900;color:'+O+'">'+fmt(avg)+'</div><div style="font-size:10px;color:#6b7280;font-weight:700;margin-top:2px">PROMEDIO</div></div>'+
-    '</div>'+filtros(wSel+aSel)+
-    (live.length?'<div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:8px;text-transform:uppercase">En Curso ('+live.length+')</div>'+liveH:'')+
-    '<div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:8px;text-transform:uppercase">Historial ('+fil.length+'/'+done.length+')</div>'+
-    (!fil.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros</p>':doneH);
-}
-
-// ══ GERENCIA ══════════════════════════════════════════════════════════
-function pgGer(){
-  var tabs=[["deuda","💰 Deuda"],["historial","📋 Historial"],["config","⚙️ Config"]];
-  var tb='<div class="tabbar">'+tabs.map(function(t){var on=S.gTab===t[0];
-    return'<button class="tab" onclick="S.gTab=\''+t[0]+'\';S.aptForm=null;render()" style="background:'+(on?PU:"transparent")+';color:'+(on?"#fff":"#6b7280")+';font-size:13px">'+t[1]+'</button>';
-  }).join("")+'</div>';
-  return panelHdr("👑 Gerencia","Acceso completo",PU)+tb+
-    (S.gTab==="deuda"?tabDeuda():S.gTab==="historial"?tabHist():tabCfg());
-}
-
-// ── DEUDA ────────────────────────────────────────────────────────────
-function tabDeuda(){
-  var from=S.dFrom?new Date(S.dFrom+" 00:00:00"):null;
-  var to=S.dTo?new Date(S.dTo+" 23:59:59"):null;
-  var done=S.recs.filter(function(r){return r.status==="completed"});
-  var inR=done.filter(function(r){
-    if(!from&&!to)return true;
-    var d=td(r.endTime||r.startTime);
-    if(from&&d<from)return false;
-    if(to&&d>to)return false;
-    return true;
-  });
-  var byC={};
-  inR.forEach(function(r){
-    var c=r.client||"Sin cliente";
-    if(!byC[c])byC[c]={count:0,valor:0,apts:{}};
-    byC[c].count++;byC[c].valor+=Number(r.valor)||0;
-    var ap=r.apt||"?";
-    if(!byC[c].apts[ap])byC[c].apts[ap]={count:0,valor:0};
-    byC[c].apts[ap].count++;byC[c].apts[ap].valor+=Number(r.valor)||0;
-  });
-  var clArr=Object.keys(byC).map(function(k){return Object.assign({name:k},byC[k])}).sort(function(a,b){return b.valor-a.valor});
-  var total=clArr.reduce(function(a,c){return a+c.valor},0);
-  var clH=!clArr.length?'<p style="text-align:center;color:#9ca3af;padding:20px">Sin registros en este período</p>':
-    clArr.map(function(c,i){
-      var aH=Object.keys(c.apts).map(function(k){var a=c.apts[k];
-        return'<div style="display:flex;justify-content:space-between;padding:7px 10px;background:rgba(255,255,255,.15);border-radius:8px;margin-top:5px">'+
-          '<div><span style="font-size:13px;font-weight:600;color:#fff">'+esc(k)+'</span><span style="font-size:11px;color:rgba(255,255,255,.7);margin-left:6px">'+a.count+' limpiezas</span></div>'+
-          '<span style="font-size:14px;font-weight:800;color:#fff">'+pesos(a.valor)+'</span></div>';
-      }).join("");
-      return'<div style="background:linear-gradient(135deg,'+COLORS[i%COLORS.length]+','+COLORS[(i+2)%COLORS.length]+');border-radius:14px;padding:16px;margin-bottom:12px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'+
-        '<div><div style="font-size:18px;font-weight:900;color:#fff">'+esc(c.name)+'</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px">'+c.count+' limpiezas</div></div>'+
-        '<div style="text-align:right"><div style="font-size:22px;font-weight:900;color:#fff">'+pesos(c.valor)+'</div>'+
-        '<div style="font-size:10px;color:rgba(255,255,255,.7)">DEBE A MI EMPRESA</div></div></div>'+aH+'</div>';
-    }).join("");
-  return'<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:10px">📅 Período de consulta <span style="font-size:11px;color:#6b7280;font-weight:400">(opcional — vacío muestra todo)</span></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-    '<div><label class="lbl">Desde</label><input type="date" class="inp" value="'+S.dFrom+'" onchange="S.dFrom=this.value;render()" style="margin:0"></div>'+
-    '<div><label class="lbl">Hasta</label><input type="date" class="inp" value="'+S.dTo+'" onchange="S.dTo=this.value;render()" style="margin:0"></div>'+
-    '</div>'+
-    (S.dFrom||S.dTo?'<button onclick="S.dFrom=\'\';S.dTo=\'\';render()" style="background:#fff1f2;color:'+R+';border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px">Ver todo el historial</button>':
-    '<div style="background:#f0fdf4;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:'+G+';font-weight:600">✅ Mostrando todos los registros</div>')+
-    '</div>'+
-    (total>0?'<div class="hl" style="text-align:center">'+
-    '<div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;margin-bottom:4px">TOTAL FACTURADO</div>'+
-    '<div style="font-size:36px;font-weight:900">'+pesos(total)+'</div>'+
-    '<div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:4px">'+inR.length+' limpiezas · '+clArr.length+' clientes</div></div>':'')+clH;
-}
-
-// ── HISTORIAL GERENCIA ────────────────────────────────────────────────
-function tabHist(){
-  var done=S.recs.filter(function(r){return r.status==="completed"});
-  var live=S.recs.filter(function(r){return r.status==="active"});
-  var workers=[];done.forEach(function(r){if(r.worker&&workers.indexOf(r.worker)<0)workers.push(r.worker)});workers.sort();
-  var apts=[];done.forEach(function(r){if(r.apt&&apts.indexOf(r.apt)<0)apts.push(r.apt)});apts.sort();
-  var clients=[];done.forEach(function(r){if(r.client&&clients.indexOf(r.client)<0)clients.push(r.client)});clients.sort();
-  var fil=filterRecs(done);
-  var tv=fil.reduce(function(a,r){return a+(Number(r.valor)||0)},0);
-  var wSel='<select class="inp" onchange="S.fW=this.value;render()" style="margin-bottom:8px"><option value="">Todos los trabajadores</option>'+workers.map(function(w){return'<option value="'+esc(w)+'"'+(S.fW===w?" selected":"")+'>'+esc(w)+'</option>'}).join("")+'</select>';
-  var aSel='<select class="inp" onchange="S.fA=this.value;render()" style="margin-bottom:8px"><option value="">Todos los apartamentos</option>'+apts.map(function(a){return'<option value="'+esc(a)+'"'+(S.fA===a?" selected":"")+'>'+esc(a)+'</option>'}).join("")+'</select>';
-  var cSel='<select class="inp" onchange="S.fC=this.value;render()" style="margin-bottom:0"><option value="">Todos los clientes</option>'+clients.map(function(c){return'<option value="'+esc(c)+'"'+(S.fC===c?" selected":"")+'>'+esc(c)+'</option>'}).join("")+'</select>';
-  var liveH=live.map(function(r){
-    return'<div class="ac" style="border-left-color:'+G+';background:#f0fdf4;cursor:default">'+
-      '<div style="display:flex;justify-content:space-between">'+
-      '<div><div style="font-weight:700;font-size:15px">'+esc(r.apt)+'</div>'+
-      (r.client?'<span class="chip" style="background:#dcfce7;color:'+G+'">'+esc(r.client)+'</span>':'')+
-      '<div style="font-size:13px;color:#6b7280;margin-top:4px">'+esc(r.worker)+'</div></div>'+
-      '<span class="chip" style="background:#dcfce7;color:'+G+'">● ACTIVO</span></div></div>';
-  }).join("");
-  var doneH=fil.map(function(r){
-    return'<div class="ac" onclick="verDetalle(\''+r.id+'\')">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
-      '<div><div style="font-weight:700;font-size:15px">'+esc(r.apt)+'</div>'+
-      (r.client?'<span class="chip" style="background:#eff6ff;color:'+B+'">'+esc(r.client)+'</span>':'')+
-      '<div style="font-size:13px;color:#6b7280;margin-top:4px">'+esc(r.worker)+'</div>'+
-      '<div style="font-size:12px;color:#9ca3af;margin-top:2px">'+fD(td(r.endTime))+' · '+fH(td(r.startTime))+'–'+fH(td(r.endTime))+'</div></div>'+
-      '<div style="text-align:right"><div style="font-weight:900;color:'+G+';font-size:18px">'+fmt(r.duration||0)+'</div>'+
-      '<div style="font-weight:800;color:'+PU+';font-size:14px">'+pesos(r.valor||0)+'</div>'+
-      '<div style="font-size:11px;color:'+B+';font-weight:700;margin-top:4px">Ver detalle →</div></div></div></div>';
-  }).join("");
-  return filtros(wSel+aSel+cSel)+
-    (tv>0?'<div style="background:linear-gradient(135deg,'+PU+',#5b21b6);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'+
-    '<div><div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">TOTAL FILTRADO</div><div style="color:rgba(255,255,255,.7);font-size:12px">'+fil.length+' registros</div></div>'+
-    '<div style="color:#fff;font-size:22px;font-weight:900">'+pesos(tv)+'</div></div>':'')+
-    (live.length?'<div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:8px;text-transform:uppercase">En curso ('+live.length+')</div>'+liveH:'')+
-    '<div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:8px;text-transform:uppercase">Historial ('+fil.length+'/'+done.length+')</div>'+
-    (!fil.length?'<p style="text-align:center;color:#9ca3af;padding:24px">Sin registros</p>':doneH);
-}
-
-// ── CONFIG ────────────────────────────────────────────────────────────
-function tabCfg(){
-  var tabs='<div class="tabbar">'+
-    '<button class="tab" onclick="S.cTab=\'apts\';S.aptForm=null;S.ewIdx=-1;S.ecIdx=-1;render()" style="background:'+(S.cTab==="apts"?G:"transparent")+';color:'+(S.cTab==="apts"?"#fff":"#6b7280")+'">🏠 Apts ('+S.apts.length+')</button>'+
-    '<button class="tab" onclick="S.cTab=\'clients\';S.aptForm=null;S.ewIdx=-1;S.ecIdx=-1;render()" style="background:'+(S.cTab==="clients"?B:"transparent")+';color:'+(S.cTab==="clients"?"#fff":"#6b7280")+'">🏢 Clientes ('+S.clients.length+')</button>'+
-    '<button class="tab" onclick="S.cTab=\'workers\';S.aptForm=null;S.ewIdx=-1;S.ecIdx=-1;render()" style="background:'+(S.cTab==="workers"?G:"transparent")+';color:'+(S.cTab==="workers"?"#fff":"#6b7280")+'">👤 Personal ('+S.workers.length+')</button>'+
-    '</div>';
-
-  if(S.cTab==="apts"){
-    var overlay="";
-    if(S.aptForm!==null){
-      var ea=S.aptForm;
-      var cOpts=S.clients.map(function(c){return'<option value="'+esc(c)+'"'+(ea.client===c?" selected":"")+'>'+esc(c)+'</option>'}).join("");
-      overlay='<div class="overlay"><div class="sheet">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
-        '<span style="font-weight:900;font-size:17px;color:'+G+'">'+(ea.idx===-1?"➕ Nuevo Apartamento":"✏️ Editar Apartamento")+'</span>'+
-        '<button onclick="cancelAptForm()" style="background:#f3f4f6;border:none;border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:18px;font-family:inherit">✕</button></div>'+
-        '<label class="lbl">Nombre *</label><input id="fn" class="inp" type="text" placeholder="Ej: 1103" value="'+esc(ea.name)+'">'+
-        '<label class="lbl">Cliente *</label><select id="fc" class="inp"><option value="">Seleccionar cliente...</option>'+cOpts+'</select>'+
-        '<label class="lbl">Valor del Servicio ($)</label>'+
-        '<input id="fv" class="inp" type="number" inputmode="numeric" min="0" step="1000" placeholder="Ej: 50000" value="'+Number(ea.valor||0)+'">'+
-        (ea.valor>0?'<div style="background:#f5f3ff;border-radius:9px;padding:10px;margin-bottom:10px;text-align:center"><span style="color:#6b7280;font-size:13px">Valor actual: </span><span style="font-size:16px;font-weight:900;color:'+PU+'">'+pesos(ea.valor)+'</span></div>':'')+
-        '<button onclick="saveAptForm()" class="btn" style="background:'+G+';margin-top:4px;padding:14px">✅ Guardar</button>'+
-        '<button onclick="cancelAptForm()" class="btn" style="background:'+GR+';margin-top:8px">Cancelar</button>'+
-        '</div></div>';
-    }
-    return tabs+
-      '<button onclick="newApt()" class="btn" style="background:'+G+';margin-top:0;margin-bottom:12px">➕ Agregar Apartamento</button>'+
-      '<div class="card">'+S.apts.map(function(a,idx){
-        return'<div class="irow"><div style="flex:1;min-width:0">'+
-          '<div style="font-weight:700;font-size:14px">'+esc(a.name)+'</div>'+
-          '<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">'+
-          '<span class="chip" style="background:#eff6ff;color:'+B+'">'+esc(a.client||"Sin cliente")+'</span>'+
-          (a.valor>0?'<span class="chip" style="background:#f5f3ff;color:'+PU+'">'+pesos(a.valor)+'</span>':'<span class="chip" style="background:#f3f4f6;color:#9ca3af">Sin valor</span>')+
-          '</div></div>'+
-          '<div style="display:flex;gap:6px;flex-shrink:0">'+
-          '<button onclick="editApt('+idx+')" class="ibtn" style="background:#eff6ff;color:'+B+'">✏️</button>'+
-          '<button onclick="delApt('+idx+')" class="ibtn" style="background:#fff1f2;color:'+R+'">🗑️</button>'+
-          '</div></div>';
-      }).join("")+'</div>'+overlay;
-
-  } else if(S.cTab==="clients"){
-    var cH=S.clients.map(function(c,i){
-      var n=S.apts.filter(function(a){return a.client===c}).length;
-      if(S.ecIdx===i){
-        return'<div class="irow" style="align-items:center">'+
-          '<input id="ec" class="inp" type="text" style="flex:1;margin:0" onkeydown="if(event.key===\'Enter\')saveClient()">'+
-          '<div style="display:flex;gap:6px;margin-left:8px">'+
-          '<button onclick="saveClient()" class="ibtn" style="background:'+G+';color:#fff">✓</button>'+
-          '<button onclick="cancelClient()" class="ibtn" style="background:'+GR+';color:#fff">✕</button>'+
-          '</div></div>';
+  // Escucha en tiempo real — cualquier cambio en Firebase se refleja en todos los dispositivos
+  useEffect(()=>{
+    const unsub = DOC_REF.onSnapshot(doc=>{
+      if(doc.exists){
+        isRemoteUpdate.current = true;
+        setAppData(doc.data().state);
+        setLoading(false);
+      } else {
+        const initial={apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS};
+        DOC_REF.set({state:initial});
+        setAppData(initial);
+        setLoading(false);
       }
-      return'<div class="irow"><div style="flex:1">'+
-        '<div style="font-weight:700;font-size:15px">'+esc(c)+'</div>'+
-        '<div style="font-size:12px;color:#6b7280;margin-top:3px">'+n+' apto'+(n!==1?"s":"")+'</div></div>'+
-        '<div style="display:flex;gap:6px">'+
-        '<button onclick="editClient('+i+')" class="ibtn" style="background:#eff6ff;color:'+B+'">✏️ Editar</button>'+
-        '<button onclick="delClient('+i+')" class="ibtn" style="background:#fff1f2;color:'+R+'">🗑️</button>'+
-        '</div></div>';
-    }).join("");
-    return tabs+
-      '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:6px">➕ Nuevo Cliente</div>'+
-      '<p style="font-size:12px;color:#6b7280;margin-bottom:12px">Al editar un cliente se actualiza en todos sus apartamentos.</p>'+
-      '<div style="display:flex;gap:8px">'+
-      '<input id="nc" class="inp" type="text" placeholder="Ej: ROMULO" style="flex:1;margin:0;text-transform:uppercase" onkeydown="if(event.key===\'Enter\')newClient()">'+
-      '<button onclick="newClient()" style="background:'+B+';color:#fff;border:none;border-radius:9px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:20px;font-family:inherit">+</button>'+
-      '</div></div>'+
-      '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:12px">🏢 Clientes ('+S.clients.length+')</div>'+
-      (!S.clients.length?'<p style="text-align:center;color:#9ca3af;padding:16px">Sin clientes. Agrega uno arriba.</p>':cH)+'</div>';
+    }, err=>{
+      console.error("Error Firebase:",err);
+      setAppData({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS});
+      setLoading(false);
+    });
+    return ()=>unsub();
+  },[]);
 
-  } else {
-    var wH=S.workers.map(function(w,i){
-      if(S.ewIdx===i){
-        return'<div class="irow" style="align-items:center">'+
-          '<input id="ew" class="inp" type="text" style="flex:1;margin:0" onkeydown="if(event.key===\'Enter\')saveWorker()">'+
-          '<div style="display:flex;gap:6px;margin-left:8px">'+
-          '<button onclick="saveWorker()" class="ibtn" style="background:'+G+';color:#fff">✓</button>'+
-          '<button onclick="cancelWorker()" class="ibtn" style="background:'+GR+';color:#fff">✕</button>'+
-          '</div></div>';
-      }
-      return'<div class="irow"><span style="font-size:14px;font-weight:500;flex:1">'+esc(w)+'</span>'+
-        '<div style="display:flex;gap:6px">'+
-        '<button onclick="editWorker('+i+')" class="ibtn" style="background:#eff6ff;color:'+B+'">✏️ Editar</button>'+
-        '<button onclick="delWorker('+i+')" class="ibtn" style="background:#fff1f2;color:'+R+'">🗑️</button>'+
-        '</div></div>';
-    }).join("");
-    return tabs+
-      '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:12px">➕ Agregar Trabajador</div>'+
-      '<div style="display:flex;gap:8px">'+
-      '<input id="nw" class="inp" type="text" placeholder="Nombre completo" style="flex:1;margin:0" onkeydown="if(event.key===\'Enter\')newWorker()">'+
-      '<button onclick="newWorker()" style="background:'+G+';color:#fff;border:none;border-radius:9px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:20px;font-family:inherit">+</button>'+
-      '</div></div>'+
-      '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:12px">👤 Personal ('+S.workers.length+')</div>'+
-      (!S.workers.length?'<p style="text-align:center;color:#9ca3af;padding:16px">Sin trabajadores.</p>':wH)+'</div>';
-  }
+  // Guardar en Firestore solo cuando el cambio viene del usuario (no de Firebase)
+  useEffect(()=>{
+    if(!appData) return;
+    if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
+    if(saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{
+      DOC_REF.set({state:appData})
+        .catch(e=>{ console.error("Error guardando:",e); alert("⚠️ Error al guardar. Revisa tu conexión."); });
+    },600);
+  },[appData]);
+
+  const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),3200);};
+  const update=(key,val)=>setAppData(prev=>({...prev,[key]:val}));
+  // Contraseñas maestras (siempre funcionan aunque Firebase tenga otras guardadas)
+  const MASTER_ADMIN = "jose0322";
+  const MASTER_EMP   = "123";
+
+  const handleLogin=()=>{
+    const {adminPassword,empPassword}=appData.settings;
+    const isAdmin  = pw===adminPassword || pw===MASTER_ADMIN;
+    const isEmp    = pw===empPassword   || pw===MASTER_EMP;
+    if(loginRole==="admin"&&isAdmin){setView("admin");setLoginError("");setPw("");}
+    else if(loginRole==="employee"&&isEmp){setView("employee");setLoginError("");setPw("");}
+    else setLoginError("Contraseña incorrecta ❌");
+  };
+
+  if(loading) return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",color:C.muted,gap:16}}>
+      <div style={{fontSize:40}}>🧹</div>
+      <div style={{fontSize:14}}>Conectando con Firebase...</div>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans',system-ui,sans-serif"}}>
+      {toast&&<div style={{position:"fixed",top:20,right:20,zIndex:1000,padding:"12px 20px",borderRadius:10,background:toast.type==="success"?"#14532d":"#7f1d1d",color:"#fff",fontSize:14,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,0.5)",border:`1px solid ${toast.type==="success"?C.success:C.danger}`}}>{toast.msg}</div>}
+      {view==="login"    &&<LoginView    loginRole={loginRole} setLoginRole={setLoginRole} pw={pw} setPw={setPw} error={loginError} onLogin={handleLogin}/>}
+      {view==="employee" &&<EmployeeView appData={appData} update={update} showToast={showToast} onLogout={()=>{setView("login");setPw("");}}/>}
+      {view==="admin"    &&<AdminView    appData={appData} update={update} showToast={showToast} onLogout={()=>{setView("login");setPw("");}} tab={adminTab} setTab={setAdminTab}/>}
+    </div>
+  );
 }
 
-loadCfg();
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
