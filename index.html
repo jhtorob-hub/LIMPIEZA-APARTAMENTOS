@@ -48,7 +48,7 @@
 const { useState, useEffect, useRef } = React;
 
 // Firebase init (protegido)
-let db=null, DOC_REF=null, CLEANINGS_COL=null, FIREBASE_OK=false;
+let db=null, DOC_REF=null, CLEANINGS_COL=null, APARTMENTS_COL=null, FIREBASE_OK=false;
 try {
   if (!firebase.apps.length) { firebase.initializeApp({
     apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
@@ -60,10 +60,11 @@ try {
   }); }
   db = firebase.firestore();
   DOC_REF = db.collection("app_data").doc("main");
-  // Cada limpieza se guarda como documento individual (no como parte del bloque
-  // grande de estado). Así, si dos personas registran al mismo tiempo, ambos
-  // registros se guardan siempre — uno nunca sobrescribe al otro.
+  // Cada limpieza y cada apartamento se guardan como documentos individuales
+  // (no como parte del bloque grande de estado). Así, si dos personas editan
+  // al mismo tiempo, nadie le pisa el cambio al otro.
   CLEANINGS_COL = DOC_REF.collection("cleanings_log");
+  APARTMENTS_COL = DOC_REF.collection("apartments_log");
   FIREBASE_OK = true;
 } catch(e) {
   console.error("Error inicializando Firebase:", e);
@@ -181,9 +182,14 @@ function EmployeeView({appData,update,showToast,onLogout}){
     if(!nBuilding.trim()){showToast("El edificio es requerido","error");return;}
     const num=nAptNum.trim(),bld=nBuilding.trim();
     const displayName=num?`${num} ${bld}`:bld;
-    update("apartments",[...appData.apartments,{id:uid(),aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:0}]);
-    setNAptNum("");setNBuilding("");setNClient("");setShowNewApt(false);
-    showToast(`${displayName} agregado ✅`);
+    // Se guarda como documento propio — nunca pisa apartamentos que otro
+    // colaborador haya agregado justo antes.
+    APARTMENTS_COL.add({aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:0})
+      .then(()=>{
+        setNAptNum("");setNBuilding("");setNClient("");setShowNewApt(false);
+        showToast(`${displayName} agregado ✅`);
+      })
+      .catch(e=>{console.error(e);showToast("No se pudo agregar, intenta de nuevo","error");});
   };
   const sorted=[...appData.apartments].sort((a,b)=>a.building.localeCompare(b.building)||String(a.aptNumber).localeCompare(String(b.aptNumber),undefined,{numeric:true}));
   const buildingGroups=[...new Set(sorted.map(a=>a.building))];
@@ -332,14 +338,22 @@ function BackupSection({appData,update,showToast}){
         const p=JSON.parse(ev.target.result);
         if(!p.apartments||!p.cleanings||!p.employees||!p.settings){showToast("Archivo inválido","error");return;}
         if(!window.confirm("¿Restaurar este backup? Se reemplazarán todos los datos actuales."))return;
-        update("apartments",p.apartments);update("employees",p.employees);update("settings",p.settings);
+        update("settings",p.settings);
+        DOC_REF.update({"state.employees":p.employees}).catch(e=>console.error(e));
         CLEANINGS_COL.get().then(snap=>{
           const batch=db.batch();
           snap.docs.forEach(d=>batch.delete(d.ref));
           p.cleanings.forEach(c=>{const {id,...rest}=c;batch.set(CLEANINGS_COL.doc(id||uid()),rest);});
           return batch.commit();
-        }).then(()=>showToast("Backup restaurado ✅"))
+        }).then(()=>showToast("Registros de limpieza restaurados ✅"))
           .catch(e=>{console.error(e);showToast("Error al restaurar los registros","error");});
+        APARTMENTS_COL.get().then(snap=>{
+          const batch=db.batch();
+          snap.docs.forEach(d=>batch.delete(d.ref));
+          p.apartments.forEach(a=>{const {id,...rest}=a;batch.set(APARTMENTS_COL.doc(id||uid()),rest);});
+          return batch.commit();
+        }).then(()=>showToast("Apartamentos restaurados ✅"))
+          .catch(e=>{console.error(e);showToast("Error al restaurar los apartamentos","error");});
       }catch(err){showToast("Error al leer el archivo","error");}
     };
     reader.readAsText(file);e.target.value="";
@@ -813,18 +827,18 @@ function ConfigTab({appData,update,showToast}){
     if(!nBuilding.trim()){showToast("El edificio es requerido","error");return;}
     const num=nAptNum.trim(),bld=nBuilding.trim();
     const displayName=num?`${num} ${bld}`:bld;
-    const newApt={id:uid(),aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:parseInt(nPrice)||0};
-    const updated=[...localApts,newApt];
-    setLocalApts(updated);
-    update("apartments",updated);
-    setNAptNum("");setNBuilding("");setNClient("");setNPrice("");
-    showToast(`${displayName} agregado ✅`);
+    // Documento propio en Firestore — nunca pisa otros apartamentos.
+    APARTMENTS_COL.add({aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:parseInt(nPrice)||0})
+      .then(()=>{
+        setNAptNum("");setNBuilding("");setNClient("");setNPrice("");
+        showToast(`${displayName} agregado ✅`);
+      })
+      .catch(e=>{console.error(e);showToast("No se pudo agregar, intenta de nuevo","error");});
   };
   const delApt=(id)=>{
-    const updated=localApts.filter(a=>a.id!==id);
-    setLocalApts(updated);
-    update("apartments",updated);
-    showToast("Apartamento eliminado","error");
+    APARTMENTS_COL.doc(id).delete()
+      .then(()=>showToast("Apartamento eliminado","error"))
+      .catch(e=>{console.error(e);showToast("No se pudo eliminar, intenta de nuevo","error");});
   };
   const updLocalApt=(id,field,val)=>{
     setLocalApts(prev=>prev.map(a=>{
@@ -836,13 +850,31 @@ function ConfigTab({appData,update,showToast}){
     setAptsDirty(true);
   };
   const saveApts=()=>{
-    const normalized=localApts.map(a=>({...a,price:parseInt(a.price)||0}));
-    update("apartments",normalized);
-    setAptsDirty(false);
-    showToast("Apartamentos guardados ✅");
+    // Cada apartamento se guarda en SU PROPIO documento — nunca se toca el
+    // documento de otro apartamento, así que nada se pierde entre ediciones.
+    const batch=db.batch();
+    localApts.forEach(a=>{
+      const {id,...rest}=a;
+      batch.set(APARTMENTS_COL.doc(id), {...rest,price:parseInt(rest.price)||0}, {merge:true});
+    });
+    batch.commit()
+      .then(()=>{ setAptsDirty(false); showToast("Apartamentos guardados ✅"); })
+      .catch(e=>{console.error(e);showToast("No se pudo guardar, intenta de nuevo","error");});
   };
-  const addEmp=()=>{if(!newEmp.trim())return;update("employees",[...appData.employees,newEmp.trim().toUpperCase()]);setNewEmp("");showToast("Encargado agregado ✅");};
-  const delEmp=(name)=>{update("employees",appData.employees.filter(e=>e!==name));showToast("Eliminado","error");};
+  const addEmp=()=>{
+    if(!newEmp.trim())return;
+    const name=newEmp.trim().toUpperCase();
+    // arrayUnion es atómico: Firebase lo agrega sin necesitar la lista completa,
+    // así que nunca borra un encargado que otro admin haya agregado justo antes.
+    DOC_REF.update({"state.employees": firebase.firestore.FieldValue.arrayUnion(name)})
+      .then(()=>{setNewEmp("");showToast("Encargado agregado ✅");})
+      .catch(e=>{console.error(e);showToast("No se pudo agregar, intenta de nuevo","error");});
+  };
+  const delEmp=(name)=>{
+    DOC_REF.update({"state.employees": firebase.firestore.FieldValue.arrayRemove(name)})
+      .then(()=>showToast("Eliminado","error"))
+      .catch(e=>{console.error(e);showToast("No se pudo eliminar, intenta de nuevo","error");});
+  };
   const savePws=()=>{const s={...appData.settings};if(newAdminPw)s.adminPassword=newAdminPw;if(newEmpPw)s.empPassword=newEmpPw;update("settings",s);setNewAdminPw("");setNewEmpPw("");showToast("Contraseñas guardadas ✅");};
   const filteredApts=localApts.filter(a=>a.displayName.toLowerCase().includes(aptSearch.toLowerCase())||a.clientName?.toLowerCase().includes(aptSearch.toLowerCase())).sort((a,b)=>a.displayName.localeCompare(b.displayName));
   const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
@@ -922,13 +954,16 @@ function ConfigTab({appData,update,showToast}){
 }
 
 function App(){
-  // "core" guarda apartamentos, encargados y configuración — se sigue guardando
-  // como un solo bloque porque lo edita un admin a la vez y rara vez cambia.
+  // "core" ahora solo guarda encargados y configuración (contraseñas). Los
+  // encargados se agregan/quitan con operaciones atómicas (arrayUnion/arrayRemove),
+  // así que un cambio de uno nunca pisa el cambio de otro.
   const [core,setCore]=useState(null);
-  // "cleaningsLog" es la lista de limpiezas, ahora leída en vivo desde documentos
-  // individuales — nunca se sobrescribe entera, así que nada se pierde.
+  // "cleaningsLog" y "apartmentsLog" son listas leídas en vivo desde documentos
+  // individuales — nunca se sobrescriben enteras, así que nada se pierde.
   const [cleaningsLog,setCleaningsLog]=useState(null);
+  const [apartmentsLog,setApartmentsLog]=useState(null);
   const [migrated,setMigrated]=useState(false);
+  const [migratedApts,setMigratedApts]=useState(false);
   const [view,setView]=useState("login");
   const [loginRole,setLoginRole]=useState("employee");
   const [pw,setPw]=useState("");
@@ -943,17 +978,18 @@ function App(){
   useEffect(()=>{
     if(!FIREBASE_OK || !DOC_REF){
       console.error("Firebase no disponible");
-      setCore({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,settings:DEFAULT_SETTINGS});
+      setCore({employees:DEFAULT_EMPLOYEES,settings:DEFAULT_SETTINGS});
       return;
     }
     const unsub = DOC_REF.onSnapshot(doc=>{
       if(doc.exists){
         const st=doc.data().state||{};
         isRemoteUpdate.current = true;
-        setCore({apartments:st.apartments||DEFAULT_APARTMENTS,employees:st.employees||DEFAULT_EMPLOYEES,settings:st.settings||DEFAULT_SETTINGS});
-        // Migración única: si quedan limpiezas guardadas a la vieja usanza (dentro
-        // del bloque grande), se copian a documentos individuales y no se vuelven
-        // a tocar aquí. Es seguro repetir esto — nunca duplica.
+        setCore({employees:st.employees||DEFAULT_EMPLOYEES,settings:st.settings||DEFAULT_SETTINGS});
+        // Migraciones únicas: si quedan limpiezas o apartamentos guardados a la
+        // vieja usanza (dentro del bloque grande), se copian a documentos
+        // individuales y no se vuelven a tocar aquí. Es seguro repetir esto —
+        // nunca duplica.
         if(Array.isArray(st.cleanings) && st.cleanings.length>0 && !migrated){
           setMigrated(true);
           const batch=db.batch();
@@ -962,23 +998,40 @@ function App(){
             batch.set(CLEANINGS_COL.doc(id||uid()), rest, {merge:true});
           });
           batch.commit()
-            .then(()=>DOC_REF.set({state:{...st,cleanings:[]}},{merge:true}))
+            .then(()=>DOC_REF.set({state:{cleanings:[]}},{merge:true}))
             .catch(e=>console.error("Migración de registros falló:",e));
         } else if(!migrated){
           setMigrated(true);
         }
+        if(Array.isArray(st.apartments) && st.apartments.length>0 && !migratedApts){
+          setMigratedApts(true);
+          const batch=db.batch();
+          st.apartments.forEach(a=>{
+            const {id,...rest}=a;
+            batch.set(APARTMENTS_COL.doc(id||uid()), rest, {merge:true});
+          });
+          batch.commit()
+            .then(()=>DOC_REF.set({state:{apartments:[]}},{merge:true}))
+            .catch(e=>console.error("Migración de apartamentos falló:",e));
+        } else if(!migratedApts){
+          setMigratedApts(true);
+        }
       } else {
-        const initial={apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS};
+        const initial={apartments:[],employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS};
         DOC_REF.set({state:initial});
-        setCore({apartments:initial.apartments,employees:initial.employees,settings:initial.settings});
+        setCore({employees:initial.employees,settings:initial.settings});
+        const batch=db.batch();
+        DEFAULT_APARTMENTS.forEach(a=>{ const {id,...rest}=a; batch.set(APARTMENTS_COL.doc(id), rest, {merge:true}); });
+        batch.commit().catch(e=>console.error("No se pudieron crear los apartamentos iniciales:",e));
         setMigrated(true);
+        setMigratedApts(true);
       }
     }, err=>{
       console.error("Error Firebase:",err);
-      setCore({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,settings:DEFAULT_SETTINGS});
+      setCore({employees:DEFAULT_EMPLOYEES,settings:DEFAULT_SETTINGS});
     });
     return ()=>unsub();
-  },[migrated]);
+  },[migrated,migratedApts]);
 
   // Escucha en vivo la lista de limpiezas — cada una es su propio documento
   useEffect(()=>{
@@ -989,19 +1042,29 @@ function App(){
     return ()=>unsub();
   },[]);
 
-  const appData = core ? {...core, cleanings: cleaningsLog||[]} : null;
-  const loading = !core || cleaningsLog===null;
+  // Escucha en vivo la lista de apartamentos — cada uno es su propio documento
+  useEffect(()=>{
+    if(!FIREBASE_OK || !APARTMENTS_COL){ setApartmentsLog([]); return; }
+    const unsub = APARTMENTS_COL.onSnapshot(snap=>{
+      setApartmentsLog(snap.docs.map(d=>({id:d.id,...d.data()})));
+    }, err=>{ console.error("Error cargando apartamentos:",err); setApartmentsLog([]); });
+    return ()=>unsub();
+  },[]);
 
-  // Guardar en Firestore solo cuando cambian apartamentos/encargados/config,
-  // y solo cuando el cambio viene del usuario (no de Firebase). Las limpiezas
-  // ya no pasan por aquí — cada una se guarda al instante por su cuenta.
+  const appData = core ? {...core, cleanings: cleaningsLog||[], apartments: apartmentsLog||[]} : null;
+  const loading = !core || cleaningsLog===null || apartmentsLog===null;
+
+  // Guardar en Firestore solo cuando cambia la configuración (contraseñas),
+  // y solo cuando el cambio viene del usuario (no de Firebase). Encargados,
+  // apartamentos y limpiezas ya no pasan por aquí — cada uno se guarda al
+  // instante por su cuenta, sin poder pisar los cambios de otro.
   useEffect(()=>{
     if(!core) return;
     if(!FIREBASE_OK || !DOC_REF) return;
     if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(()=>{
-      DOC_REF.set({state:{...core,cleanings:[]}},{merge:true})
+      DOC_REF.set({state:{settings:core.settings}},{merge:true})
         .catch(e=>{ console.error("Error guardando:",e); });
     },600);
   },[core]);
