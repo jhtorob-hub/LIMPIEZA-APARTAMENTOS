@@ -48,7 +48,7 @@
 const { useState, useEffect, useRef } = React;
 
 // Firebase init (protegido)
-let db=null, DOC_REF=null, FIREBASE_OK=false;
+let db=null, DOC_REF=null, CLEANINGS_COL=null, FIREBASE_OK=false;
 try {
   if (!firebase.apps.length) { firebase.initializeApp({
     apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
@@ -60,6 +60,10 @@ try {
   }); }
   db = firebase.firestore();
   DOC_REF = db.collection("app_data").doc("main");
+  // Cada limpieza se guarda como documento individual (no como parte del bloque
+  // grande de estado). Así, si dos personas registran al mismo tiempo, ambos
+  // registros se guardan siempre — uno nunca sobrescribe al otro.
+  CLEANINGS_COL = DOC_REF.collection("cleanings_log");
   FIREBASE_OK = true;
 } catch(e) {
   console.error("Error inicializando Firebase:", e);
@@ -185,12 +189,21 @@ function EmployeeView({appData,update,showToast,onLogout}){
   const buildingGroups=[...new Set(sorted.map(a=>a.building))];
   const apt=appData.apartments.find(a=>a.id===aptId);
   const todayList=appData.cleanings.filter(c=>c.date===todayStr()).sort((a,b)=>b.createdAt-a.createdAt);
+  const [saving,setSaving]=useState(false);
   const handleSubmit=()=>{
     if(!employee||!aptId||!date){showToast("Completa todos los campos","error");return;}
-    const newC={id:uid(),date,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes,paid:false,amount:apt?.price||0,createdAt:Date.now()};
-    update("cleanings",[...appData.cleanings,newC]);
-    showToast("¡Limpieza registrada! ✅");
-    setAptId("");setNotes("");setSelectedBuilding("");
+    if(!CLEANINGS_COL){showToast("Sin conexión con la base de datos","error");return;}
+    const newC={date,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes,paid:false,amount:apt?.price||0,createdAt:Date.now()};
+    setSaving(true);
+    // Se guarda directo como documento nuevo — Firebase le asigna su propio ID,
+    // así que dos colaboradores guardando a la vez nunca se pisan entre sí.
+    CLEANINGS_COL.add(newC)
+      .then(()=>{
+        showToast("¡Limpieza registrada! ✅");
+        setAptId("");setNotes("");setSelectedBuilding("");
+      })
+      .catch(e=>{ console.error("Error guardando limpieza:",e); showToast("No se pudo guardar, revisa tu conexión e intenta de nuevo","error"); })
+      .finally(()=>setSaving(false));
   };
   return(
     <div style={{minHeight:"100vh",maxWidth:480,margin:"0 auto",padding:"20px 16px"}}>
@@ -227,7 +240,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
         <div style={{marginBottom:20}}><Lbl>Observaciones (opcional)</Lbl>
           <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Estado del apartamento, novedades..." rows={3} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
         </div>
-        <Btn onClick={handleSubmit} style={{width:"100%",padding:"14px",fontSize:15}}>✓ Registrar limpieza</Btn>
+        <Btn onClick={handleSubmit} disabled={saving} style={{width:"100%",padding:"14px",fontSize:15}}>{saving?"Guardando...":"✓ Registrar limpieza"}</Btn>
       </Card>
       <div style={{marginBottom:20}}>
         <button onClick={()=>setShowNewApt(!showNewApt)} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.border}`,borderRadius:10,color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
@@ -295,7 +308,7 @@ function BackupSection({appData,update,showToast}){
     const clientRows=Object.entries(byClient).map(([n,d])=>({"Cliente":n,"Limpiezas":d.limpiezas,"Total":d.total,"Pagado":d.pagado,"Pendiente":d.pendiente}));
 
     const sep="\n\n";
-    const csv="\uFEFF"+"REGISTROS DE LIMPIEZAS\n"+toCSV(rows,headers)+sep+"RESUMEN POR ENCARGADO\n"+toCSV(empRows,["Encargado","Limpiezas","Total","Pagado","Pendiente"])+sep+"RESUMEN POR CLIENTE\n"+toCSV(clientRows,["Cliente","Limpiezas","Total","Pagado","Pendiente"]);
+    const csv="﻿"+"REGISTROS DE LIMPIEZAS\n"+toCSV(rows,headers)+sep+"RESUMEN POR ENCARGADO\n"+toCSV(empRows,["Encargado","Limpiezas","Total","Pagado","Pendiente"])+sep+"RESUMEN POR CLIENTE\n"+toCSV(clientRows,["Cliente","Limpiezas","Total","Pagado","Pendiente"]);
     const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
@@ -319,8 +332,14 @@ function BackupSection({appData,update,showToast}){
         const p=JSON.parse(ev.target.result);
         if(!p.apartments||!p.cleanings||!p.employees||!p.settings){showToast("Archivo inválido","error");return;}
         if(!window.confirm("¿Restaurar este backup? Se reemplazarán todos los datos actuales."))return;
-        update("apartments",p.apartments);update("cleanings",p.cleanings);update("employees",p.employees);update("settings",p.settings);
-        showToast("Backup restaurado ✅");
+        update("apartments",p.apartments);update("employees",p.employees);update("settings",p.settings);
+        CLEANINGS_COL.get().then(snap=>{
+          const batch=db.batch();
+          snap.docs.forEach(d=>batch.delete(d.ref));
+          p.cleanings.forEach(c=>{const {id,...rest}=c;batch.set(CLEANINGS_COL.doc(id||uid()),rest);});
+          return batch.commit();
+        }).then(()=>showToast("Backup restaurado ✅"))
+          .catch(e=>{console.error(e);showToast("Error al restaurar los registros","error");});
       }catch(err){showToast("Error al leer el archivo","error");}
     };
     reader.readAsText(file);e.target.value="";
@@ -620,9 +639,24 @@ function CleaningsTab({appData,update,showToast}){
     if(fPaid==="pending"&&c.paid) return false;
     return true;
   }).sort((a,b)=>b.date!==a.date?b.date?.localeCompare(a.date):b.createdAt-a.createdAt);
-  const togglePaid=(id)=>{const found=appData.cleanings.find(c=>c.id===id);update("cleanings",appData.cleanings.map(c=>c.id===id?{...c,paid:!c.paid}:c));showToast(found?.paid?"Marcado como pendiente":"Marcado como pagado ✅");};
-  const del=(id)=>{if(!window.confirm("¿Eliminar este registro?"))return;update("cleanings",appData.cleanings.filter(c=>c.id!==id));showToast("Registro eliminado","error");};
-  const saveEdit=(form)=>{update("cleanings",appData.cleanings.map(c=>c.id===form.id?{...form}:c));setEditing(null);showToast("Registro actualizado ✅");};
+  const togglePaid=(id)=>{
+    const found=appData.cleanings.find(c=>c.id===id);
+    CLEANINGS_COL.doc(id).update({paid:!found.paid})
+      .then(()=>showToast(found?.paid?"Marcado como pendiente":"Marcado como pagado ✅"))
+      .catch(e=>{console.error(e);showToast("No se pudo actualizar","error");});
+  };
+  const del=(id)=>{
+    if(!window.confirm("¿Eliminar este registro?"))return;
+    CLEANINGS_COL.doc(id).delete()
+      .then(()=>showToast("Registro eliminado","error"))
+      .catch(e=>{console.error(e);showToast("No se pudo eliminar","error");});
+  };
+  const saveEdit=(form)=>{
+    const {id,...rest}=form;
+    CLEANINGS_COL.doc(id).update(rest)
+      .then(()=>{setEditing(null);showToast("Registro actualizado ✅");})
+      .catch(e=>{console.error(e);showToast("No se pudo actualizar","error");});
+  };
   const total=filtered.reduce((s,c)=>s+(c.amount||0),0);
   const totalPaid=filtered.filter(c=>c.paid).reduce((s,c)=>s+(c.amount||0),0);
   return(
@@ -694,8 +728,19 @@ function ClientsTab({appData,update,showToast}){
   const gTotal=rows.reduce((s,[,g])=>s+g.total,0);
   const gPaid=rows.reduce((s,[,g])=>s+g.paid,0);
   const gOwed=rows.reduce((s,[,g])=>s+g.owed,0);
-  const markAllPaid=(key)=>{const g=grouped[key];const ids=g.cleanings.filter(c=>!c.paid).map(c=>c.id);update("cleanings",appData.cleanings.map(c=>ids.includes(c.id)?{...c,paid:true}:c));showToast(`Todo pagado para ${key} ✅`);};
-  const toggleOne=(id)=>update("cleanings",appData.cleanings.map(c=>c.id===id?{...c,paid:!c.paid}:c));
+  const markAllPaid=(key)=>{
+    const g=grouped[key];const ids=g.cleanings.filter(c=>!c.paid).map(c=>c.id);
+    if(ids.length===0)return;
+    const batch=db.batch();
+    ids.forEach(id=>batch.update(CLEANINGS_COL.doc(id),{paid:true}));
+    batch.commit()
+      .then(()=>showToast(`Todo pagado para ${key} ✅`))
+      .catch(e=>{console.error(e);showToast("No se pudo actualizar","error");});
+  };
+  const toggleOne=(id)=>{
+    const found=appData.cleanings.find(c=>c.id===id);
+    CLEANINGS_COL.doc(id).update({paid:!found.paid}).catch(e=>console.error(e));
+  };
   return(
     <div>
       <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Estado por cliente</h2>
@@ -877,9 +922,14 @@ function ConfigTab({appData,update,showToast}){
 }
 
 function App(){
-  const [appData,setAppData]=useState(null);
+  // "core" guarda apartamentos, encargados y configuración — se sigue guardando
+  // como un solo bloque porque lo edita un admin a la vez y rara vez cambia.
+  const [core,setCore]=useState(null);
+  // "cleaningsLog" es la lista de limpiezas, ahora leída en vivo desde documentos
+  // individuales — nunca se sobrescribe entera, así que nada se pierde.
+  const [cleaningsLog,setCleaningsLog]=useState(null);
+  const [migrated,setMigrated]=useState(false);
   const [view,setView]=useState("login");
-  const [loading,setLoading]=useState(true);
   const [loginRole,setLoginRole]=useState("employee");
   const [pw,setPw]=useState("");
   const [loginError,setLoginError]=useState("");
@@ -893,42 +943,71 @@ function App(){
   useEffect(()=>{
     if(!FIREBASE_OK || !DOC_REF){
       console.error("Firebase no disponible");
-      setLoading(false);
+      setCore({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,settings:DEFAULT_SETTINGS});
       return;
     }
     const unsub = DOC_REF.onSnapshot(doc=>{
       if(doc.exists){
+        const st=doc.data().state||{};
         isRemoteUpdate.current = true;
-        setAppData(doc.data().state);
-        setLoading(false);
+        setCore({apartments:st.apartments||DEFAULT_APARTMENTS,employees:st.employees||DEFAULT_EMPLOYEES,settings:st.settings||DEFAULT_SETTINGS});
+        // Migración única: si quedan limpiezas guardadas a la vieja usanza (dentro
+        // del bloque grande), se copian a documentos individuales y no se vuelven
+        // a tocar aquí. Es seguro repetir esto — nunca duplica.
+        if(Array.isArray(st.cleanings) && st.cleanings.length>0 && !migrated){
+          setMigrated(true);
+          const batch=db.batch();
+          st.cleanings.forEach(c=>{
+            const {id,...rest}=c;
+            batch.set(CLEANINGS_COL.doc(id||uid()), rest, {merge:true});
+          });
+          batch.commit()
+            .then(()=>DOC_REF.set({state:{...st,cleanings:[]}},{merge:true}))
+            .catch(e=>console.error("Migración de registros falló:",e));
+        } else if(!migrated){
+          setMigrated(true);
+        }
       } else {
         const initial={apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS};
         DOC_REF.set({state:initial});
-        setAppData(initial);
-        setLoading(false);
+        setCore({apartments:initial.apartments,employees:initial.employees,settings:initial.settings});
+        setMigrated(true);
       }
     }, err=>{
       console.error("Error Firebase:",err);
-      setAppData({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,cleanings:[],settings:DEFAULT_SETTINGS});
-      setLoading(false);
+      setCore({apartments:DEFAULT_APARTMENTS,employees:DEFAULT_EMPLOYEES,settings:DEFAULT_SETTINGS});
     });
+    return ()=>unsub();
+  },[migrated]);
+
+  // Escucha en vivo la lista de limpiezas — cada una es su propio documento
+  useEffect(()=>{
+    if(!FIREBASE_OK || !CLEANINGS_COL){ setCleaningsLog([]); return; }
+    const unsub = CLEANINGS_COL.orderBy("createdAt","asc").onSnapshot(snap=>{
+      setCleaningsLog(snap.docs.map(d=>({id:d.id,...d.data()})));
+    }, err=>{ console.error("Error cargando registros:",err); setCleaningsLog([]); });
     return ()=>unsub();
   },[]);
 
-  // Guardar en Firestore solo cuando el cambio viene del usuario (no de Firebase)
+  const appData = core ? {...core, cleanings: cleaningsLog||[]} : null;
+  const loading = !core || cleaningsLog===null;
+
+  // Guardar en Firestore solo cuando cambian apartamentos/encargados/config,
+  // y solo cuando el cambio viene del usuario (no de Firebase). Las limpiezas
+  // ya no pasan por aquí — cada una se guarda al instante por su cuenta.
   useEffect(()=>{
-    if(!appData) return;
+    if(!core) return;
     if(!FIREBASE_OK || !DOC_REF) return;
     if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
     if(saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(()=>{
-      DOC_REF.set({state:appData})
+      DOC_REF.set({state:{...core,cleanings:[]}},{merge:true})
         .catch(e=>{ console.error("Error guardando:",e); });
     },600);
-  },[appData]);
+  },[core]);
 
   const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),3200);};
-  const update=(key,val)=>setAppData(prev=>({...prev,[key]:val}));
+  const update=(key,val)=>setCore(prev=>({...prev,[key]:val}));
   // Contraseñas maestras (siempre funcionan aunque Firebase tenga otras guardadas)
   const MASTER_ADMIN = "jose0322";
   const MASTER_EMP   = "123";
