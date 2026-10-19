@@ -629,16 +629,15 @@ function EmployeeView({appData,update,showToast,onLogout}){
   const [pin,setPin]=useState("");
   const [pinErr,setPinErr]=useState("");
   const [pin2,setPin2]=useState("");      // confirmación al crear la clave
-  const [general,setGeneral]=useState(""); // clave general, solo la primera vez
   const pinsDe=()=>(appData.settings&&appData.settings.pins)||{};
-  const resetPin=()=>{ setPin(""); setPin2(""); setGeneral(""); setPinErr(""); };
+  const resetPin=()=>{ setPin(""); setPin2(""); setPinErr(""); };
   const entrar=()=>{
     if(pin!==String(pinsDe()[quien])){ setPinErr("Clave incorrecta"); setPin(""); return; }
     setEmployee(quien); setQuien(""); resetPin();
   };
-  // Primera vez: con la clave general que da coordinación, cada persona crea la suya
+  // Primera vez: cada persona crea su clave (el admin ve quién la creó y puede restaurarla)
   const crearClave=()=>{
-    if(general!==String(appData.settings.empPassword||"")&&general!=="123"){ setPinErr("La clave de ingreso no es correcta. Pídesela a coordinación."); return; }
+    if(pinsDe()[quien]){ setPinErr("Ya tienes clave. Escríbela para entrar."); return; }
     if(!/^\d{4,6}$/.test(pin)){ setPinErr("Tu clave debe tener de 4 a 6 números"); return; }
     if(/^(\d)\1+$/.test(pin)||"0123456789".includes(pin)||"9876543210".includes(pin)){ setPinErr("Muy fácil de adivinar. Usa otros números."); return; }
     if(pin!==pin2){ setPinErr("Las dos claves no son iguales"); setPin2(""); return; }
@@ -775,16 +774,14 @@ function EmployeeView({appData,update,showToast,onLogout}){
         <div style={{color:W.muted,fontSize:15,marginBottom:20}}>{tiene?"Escribe tu clave":"Es tu primera vez: crea tu clave personal"}</div>
       </div>
       {tiene?pinInput(pin,setPin,"Tu clave",true):(<>
-        {lbl("Clave de ingreso que te dio coordinación")}
-        <input type="password" autoFocus value={general} onChange={e=>{setGeneral(e.target.value);setPinErr("");}} aria-label="Clave de ingreso" style={{...wInput,marginBottom:16}}/>
         {lbl("Tu nueva clave (4 a 6 números)")}
-        {pinInput(pin,setPin,"Tu nueva clave",false)}
+        {pinInput(pin,setPin,"Tu nueva clave",true)}
         {lbl("Repítela")}
         {pinInput(pin2,setPin2,"Repite tu clave",false)}
       </>)}
       {pinErr&&<div style={{color:W.red,fontWeight:700,textAlign:"center",marginBottom:10}}>{pinErr}</div>}
-      {tiene?<WBtn onClick={entrar} disabled={!pin}>Entrar</WBtn>:<WBtn onClick={crearClave} disabled={!pin||!pin2||!general}>Crear mi clave y entrar</WBtn>}
-      <div style={{fontSize:13,color:W.muted,textAlign:"center",marginTop:14}}>{tiene?"¿Se te olvidó? Pídele a coordinación que la borre y creas una nueva.":"Solo tú la sabes. Con ella quedan a tu nombre tus limpiezas y tus horas."}</div>
+      {tiene?<WBtn onClick={entrar} disabled={!pin}>Entrar</WBtn>:<WBtn onClick={crearClave} disabled={!pin||!pin2}>Crear mi clave y entrar</WBtn>}
+      <div style={{fontSize:13,color:W.muted,textAlign:"center",marginTop:14}}>{tiene?"¿Se te olvidó? Pídele a coordinación que la borre y creas una nueva.":"Solo tú la sabes. Con ella quedan a tu nombre tus limpiezas y tus horas. Si te equivocas de nombre, avísale a coordinación."}</div>
     </div></div>
   );}
 
@@ -2243,7 +2240,7 @@ function ConfigTab({appData,update,showToast}){
     DOC_REF&&DOC_REF.set({state:{settings:{pins:{[e]:v}}}},{merge:true}).then(()=>{setPinNuevo(p=>({...p,[e]:""}));showToast(`Clave de ${e} cambiada ✅ Díctasela`);}).catch(err=>{console.error(err);showToast("No se pudo cambiar","error");});
   };
   const borrarPin=(e)=>{
-    if(!window.confirm(`¿Restaurar la clave de ${e}? La próxima vez que entre tendrá que crear una nueva con la clave de ingreso.`)) return;
+    if(!window.confirm(`¿Restaurar la clave de ${e}? La próxima vez que entre creará una nueva.`)) return;
     DOC_REF&&DOC_REF.set({state:{settings:{pins:{[e]:""}}}},{merge:true}).then(()=>showToast(`Clave de ${e} restaurada: la crea de nuevo al entrar`)).catch(err=>{console.error(err);showToast("No se pudo borrar","error");});
   };
   const savePws=()=>{const s={...appData.settings};if(newAdminPw)s.adminPassword=newAdminPw;if(newEmpPw)s.empPassword=newEmpPw;update("settings",s);setNewAdminPw("");setNewEmpPw("");showToast("Contraseñas guardadas ✅");};
@@ -2312,7 +2309,7 @@ function ConfigTab({appData,update,showToast}){
       {sec==="passwords"&&(<div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
         <Card style={{maxWidth:420,flex:"1 1 320px"}}>
           <h3 style={{margin:"0 0 6px",fontSize:15,fontWeight:700}}>Clave de cada aseadora</h3>
-          <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Cada una crea su propia clave la primera vez que entra, usando la clave de ingreso de encargados (la de la derecha). Si alguna la olvida, puedes ponerle una tú (Cambiar) o restaurarla para que ella cree otra.</div>
+          <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Cada una crea su propia clave la primera vez que entra con su nombre. Revisa que todas aparezcan con "Tiene clave": si alguien la creó con un nombre que no era el suyo, o alguna la olvida, ponle una tú (Cambiar) o restáurala para que ella cree otra.</div>
           {appData.employees.map(e=>{const t=!!(appData.settings.pins||{})[e];return(
             <div key={e} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
               <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
@@ -2328,7 +2325,7 @@ function ConfigTab({appData,update,showToast}){
         <Card style={{maxWidth:420,flex:"1 1 320px"}}>
           <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:700}}>Cambiar contraseñas</h3>
           <div style={{marginBottom:14}}><Lbl>Nueva contraseña Admin</Lbl><Inp type="password" value={newAdminPw} onChange={setNewAdminPw} placeholder="Dejar vacío para no cambiar"/></div>
-          <div style={{marginBottom:20}}><Lbl>Nueva clave de ingreso de encargados (para crear la clave personal)</Lbl><Inp type="password" value={newEmpPw} onChange={setNewEmpPw} placeholder="Dejar vacío para no cambiar"/></div>
+          <div style={{marginBottom:20}}><Lbl>Nueva contraseña Encargados (ya no se usa para entrar)</Lbl><Inp type="password" value={newEmpPw} onChange={setNewEmpPw} placeholder="Dejar vacío para no cambiar"/></div>
           <Btn onClick={savePws} style={{width:"100%"}}>Guardar</Btn>
           <div style={{marginTop:14,padding:12,background:C.surface,borderRadius:8,fontSize:12,color:C.muted}}>
             Admin: <code style={{color:C.accent}}>{appData.settings.adminPassword}</code>&nbsp;&nbsp;
