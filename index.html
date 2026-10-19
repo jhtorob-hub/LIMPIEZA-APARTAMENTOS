@@ -146,7 +146,7 @@ const findDuplicates = (cleanings) => {
 const APT_TYPES = { estudio:"Estudio", "1hab":"1 habitación", "2-3hab":"2–3 habitaciones" };
 const DEFAULT_JUEGOS = { estudio:1, "1hab":1, "2-3hab":2.5 };
 // Parámetros de costo por defecto (se editan en Config → Costos)
-const DEFAULT_COSTS = { costoHora:20700, lenceriaJuego:8000, insumos:5200, admin:5000, aiuPct:10, ivaPct:19, preciosConIva:true };
+const DEFAULT_COSTS = { costoHora:20700, costoHoraPagada:16200, finTurno:"16:00", lenceriaJuego:8000, insumos:5200, admin:5000, aiuPct:10, ivaPct:19, preciosConIva:true };
 const ZONAS_PROFUNDAS = ["Nevera y horno","Juntas y cortina del baño","Detrás y debajo de muebles","Vidrios, marcos y ventanas","Colchón, cortinas y lámparas"];
 const checklistFor = (tipo) => {
   const items = [
@@ -183,11 +183,13 @@ const durMin = (c) => (c.startedAt && c.finishedAt && c.finishedAt > c.startedAt
 const getCosts = (settings) => ({ ...DEFAULT_COSTS, ...((settings && settings.costs) || {}) });
 const juegosOf = (a) => (a && a.juegos !== undefined && a.juegos !== "" && a.juegos !== null) ? Number(a.juegos) : (DEFAULT_JUEGOS[a && a.tipo] ?? 1);
 // Ingreso sin IVA hoy (IVA sobre todo) y con AIU (IVA solo sobre el AIU), costo y ganancia
-const econ = (price, mins, juegos, k) => {
+// Transporte de la ropa a la lavandería: costo de un viaje ida y vuelta por edificio (Config → Costos)
+const viajeDe = (k, building) => Number((k.transporte || {})[building]) || 0;
+const econ = (price, mins, juegos, k, extra = 0) => {
   const p = Number(price) || 0;
   const hoy = k.preciosConIva ? p / (1 + k.ivaPct/100) : p;
   const aiu = k.preciosConIva ? p / (1 + (k.ivaPct/100) * (k.aiuPct/100)) : p;
-  const fijo = k.insumos + k.admin + (juegos || 0) * k.lenceriaJuego;
+  const fijo = k.insumos + k.admin + (juegos || 0) * k.lenceriaJuego + (Number(extra) || 0);
   const cost = mins == null ? null : (mins/60) * k.costoHora + fijo;
   return { hoy, aiu, cost,
     gHoy: cost == null ? null : hoy - cost,
@@ -1034,7 +1036,7 @@ function CleaningHistoryEmployee({cleanings}){
 }
 
 function AdminView({appData,update,showToast,onLogout,tab,setTab}){
-  const tabs=[["dashboard","📊 Resumen"],["agenda","📅 Agenda"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["horas","🕒 Horas"],["lenceria","🧺 Lencería"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
+  const tabs=[["dashboard","📊 Resumen"],["envivo","💹 En vivo"],["agenda","📅 Agenda"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["horas","🕒 Horas"],["lenceria","🧺 Lencería"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
   return(
     <div style={{minHeight:"100vh"}}>
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`}}>
@@ -1057,6 +1059,7 @@ function AdminView({appData,update,showToast,onLogout,tab,setTab}){
       <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 20px"}}>
         {tab==="dashboard"&&<DashboardTab appData={appData}/>}
         {tab==="cleanings"&&<CleaningsTab appData={appData} update={update} showToast={showToast}/>}
+        {tab==="envivo"   &&<EnVivoTab    appData={appData}/>}
         {tab==="agenda"   &&<AgendaTab    appData={appData} showToast={showToast}/>}
         {tab==="tiempos"  &&<TiemposTab   appData={appData}/>}
         {tab==="horas"    &&<HorasTab     appData={appData}/>}
@@ -1514,6 +1517,152 @@ function ClientsTab({appData,update,showToast}){
   );
 }
 
+// 💹 En vivo: el costo de cada aseadora corre segundo a segundo desde su primera entrada del día
+//    (incluye el tiempo muerto); el ingreso entra solo cuando se cierra un apartamento.
+function EnVivoTab({appData}){
+  const k=getCosts(appData.settings);
+  const [modo,setModo]=useState("aiu");
+  const [t,setT]=useState(Date.now());
+  useEffect(()=>{ const i=setInterval(()=>setT(Date.now()),1000); return ()=>clearInterval(i); },[]);
+  const hoy=todayStr();
+  const porSeg=(Number(k.costoHoraPagada)||0)/3600;
+  const [fh,fm]=String(k.finTurno||"16:00").split(":").map(Number);
+  const finD=new Date(); finD.setHours(fh||16,fm||0,0,0); const finTs=finD.getTime();
+  const aptOf=(c)=>appData.apartments.find(a=>a.id===c.apartmentId)||appData.apartments.find(a=>normTxt(a.displayName)===normTxt(c.apartmentName))||{tipo:c.tipo};
+  const ingresoDe=(c)=>{ const a=aptOf(c); const e=econ(c.amount||a.price||0,0,0,k); return modo==="aiu"?e.aiu:e.hoy; };
+  const bldOf=(c)=>aptOf(c).building||c.building||"";
+  const cs=appData.cleanings.filter(c=>c.date===hoy&&c.startedAt);
+  // El viaje de ropa se cobra una vez por edificio en el día: al cerrar el primer apartamento de ese edificio
+  const primerCierre={};
+  cs.filter(c=>c.finishedAt&&!c.enCurso).sort((a,b)=>a.finishedAt-b.finishedAt).forEach(c=>{const b=bldOf(c);if(!primerCierre[b])primerCierre[b]=c.id;});
+  const transpDe=(c)=>primerCierre[bldOf(c)]===c.id?viajeDe(k,bldOf(c)):0;
+  const variableDe=(c)=>k.insumos+k.admin+juegosOf(aptOf(c))*k.lenceriaJuego+transpDe(c);
+  const emps=[...new Set(cs.map(c=>c.employeeName||"—"))];
+  // Por aseadora
+  const filas=emps.map(emp=>{
+    const list=cs.filter(c=>(c.employeeName||"—")===emp).sort((a,b)=>a.startedAt-b.startedAt);
+    const ini=list[0].startedAt;
+    const activo=list.find(c=>c.enCurso);
+    const lastFin=Math.max(0,...list.filter(c=>c.finishedAt).map(c=>c.finishedAt));
+    const hasta=Math.min(t,Math.max(finTs,lastFin,activo?t:0));
+    const segs=Math.max(0,(hasta-ini)/1000);
+    const costoMO=segs*porSeg;
+    const cerrados=list.filter(c=>c.finishedAt&&!c.enCurso);
+    const ingreso=cerrados.reduce((s,c)=>s+ingresoDe(c),0);
+    const variables=cerrados.reduce((s,c)=>s+variableDe(c),0);
+    const enApto=list.reduce((s,c)=>s+(((c.finishedAt||(c.enCurso?t:c.startedAt))-c.startedAt)/1000),0);
+    const muerto=Math.max(0,segs-enApto);
+    const corriendo=t<hasta+1500;
+    let estado;
+    if(activo) estado={txt:`En ${activo.apartmentName} · ${fmtMin((t-activo.startedAt)/60000)}`,color:C.accent};
+    else if(corriendo) estado={txt:`Tiempo muerto desde ${toHM(lastFin)}`,color:C.danger};
+    else estado={txt:"Turno terminado",color:C.muted};
+    return {emp,ini,activo,costoMO,ingreso,variables,resultado:ingreso-variables-costoMO,cerrados:cerrados.length,muerto,enApto,corriendo,estado};
+  });
+  const transpHoy=Object.keys(primerCierre).reduce((s,b)=>s+viajeDe(k,b),0);
+  const tot=filas.reduce((a,f)=>({mo:a.mo+f.costoMO,ing:a.ing+f.ingreso,vari:a.vari+f.variables,res:a.res+f.resultado,corriendo:a.corriendo+(f.corriendo?1:0)}),{mo:0,ing:0,vari:0,res:0,corriendo:0});
+  // Apartamento en curso: margen en vivo y hora límite para no perder
+  const activos=cs.filter(c=>c.enCurso).map(c=>{
+    const b=bldOf(c), transp=primerCierre[b]?0:viajeDe(k,b);
+    const ing=ingresoDe(c), vari=variableDe(c)+transp, mo=((t-c.startedAt)/1000)*porSeg;
+    const limite=porSeg>0?c.startedAt+((ing-vari)/porSeg)*1000:null;
+    return {c,ing,vari,transp,mo,margen:ing-vari-mo,limite};
+  });
+  // Pendientes de la agenda: ingreso que falta por cerrar
+  const pend=(appData.agenda||[]).filter(a=>a.date===hoy&&!cs.some(c=>c.apartmentId===a.apartmentId));
+  const ingresoPend=pend.reduce((s,a)=>{const ap=appData.apartments.find(x=>x.id===a.apartmentId)||{};const e=econ(ap.price||0,0,0,k);return s+(modo==="aiu"?e.aiu:e.hoy);},0);
+  // Gráfica: costo acumulado vs ingreso acumulado durante el día
+  const t0=cs.length?Math.min(...cs.map(c=>c.startedAt)):null;
+  const t1=t0?Math.max(t,finTs):null;
+  const costoA=(x)=>filas.reduce((s,f)=>{const list=cs.filter(c=>(c.employeeName||"—")===f.emp);const lastFin=Math.max(0,...list.filter(c=>c.finishedAt).map(c=>c.finishedAt));const hasta=Math.min(x,Math.max(finTs,lastFin,list.some(c=>c.enCurso)?t:0));const mo=Math.max(0,(hasta-f.ini)/1000)*porSeg;const vari=list.filter(c=>c.finishedAt&&c.finishedAt<=x).reduce((a,c)=>a+variableDe(c),0);return s+mo+vari;},0);
+  const ingA=(x)=>cs.filter(c=>c.finishedAt&&!c.enCurso&&c.finishedAt<=x).reduce((s,c)=>s+ingresoDe(c),0);
+  const money=(v,big)=><span style={{color:v>=0?C.success:C.danger,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{v<0?"–":""}{fmtCOP(Math.abs(Math.round(v)))}</span>;
+  const kpi=(label,value,sub)=>(<Card style={{padding:16}}><div style={{fontSize:12,color:C.muted}}>{label}</div><div style={{fontSize:24,fontWeight:800,marginTop:4,fontVariantNumeric:"tabular-nums"}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>{sub}</div>}</Card>);
+  const th={textAlign:"left",padding:"10px 12px",color:C.muted,fontWeight:700,whiteSpace:"nowrap",fontSize:12};
+  const td={padding:"10px 12px",whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"};
+  let grafica=null;
+  if(t0&&t1>t0){
+    const Wd=760,Hd=260,L=70,R=20,T=40,B=36;
+    const pts=[];const paso=Math.max(60000,Math.round((t1-t0)/120));
+    for(let x=t0;x<=t1;x+=paso) pts.push(x);
+    cs.forEach(c=>{if(c.finishedAt){pts.push(c.finishedAt-1);pts.push(c.finishedAt);}});
+    pts.push(t);pts.sort((a,b)=>a-b);
+    const pc=pts.filter(x=>x<=t).map(x=>[x,costoA(x)]), pi=pts.filter(x=>x<=t).map(x=>[x,ingA(x)]);
+    const maxY=Math.max(1,...pc.map(p=>p[1]),...pi.map(p=>p[1]),ingA(t)+ingresoPend*0);
+    const X=x=>L+(x-t0)/(t1-t0)*(Wd-L-R), Y=y=>Hd-B-(y/maxY)*(Hd-T-B);
+    const path=a=>a.map((p,i)=>`${i?"L":"M"}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(" ");
+    const horas=[];const h0=new Date(t0);h0.setMinutes(0,0,0);for(let h=h0.getTime()+3600000;h<t1;h+=3600000)horas.push(h);
+    grafica=(
+      <svg viewBox={`0 0 ${Wd} ${Hd}`} style={{width:"100%",display:"block"}} role="img" aria-label="Costo acumulado contra ingreso acumulado del día">
+        <text x={L} y={22} fontSize="13" fontWeight="700" fill={C.text}>Costo acumulado vs ingreso cerrado, hoy</text>
+        {horas.map(h=><g key={h}><line x1={X(h)} x2={X(h)} y1={T} y2={Hd-B} stroke={C.border}/><text x={X(h)} y={Hd-B+18} fontSize="11" textAnchor="middle" fill={C.muted}>{toHM(h)}</text></g>)}
+        {[0,0.5,1].map(f=><text key={f} x={L-8} y={Y(maxY*f)+4} fontSize="11" textAnchor="end" fill={C.muted}>{fmtCOP(Math.round(maxY*f))}</text>)}
+        <line x1={L} x2={Wd-R} y1={Hd-B} y2={Hd-B} stroke={C.muted}/>
+        {t<=t1&&<line x1={X(t)} x2={X(t)} y1={T} y2={Hd-B} stroke={C.accent} strokeDasharray="4 4"/>}
+        <path d={path(pc)} fill="none" stroke={C.danger} strokeWidth="2.5"/>
+        <path d={path(pi)} fill="none" stroke={C.success} strokeWidth="2.5"/>
+        <text x={Math.min(X(t)+6,Wd-R-80)} y={Y(costoA(t))-6} fontSize="12" fontWeight="700" fill={C.danger}>Costo</text>
+        <text x={Math.min(X(t)+6,Wd-R-80)} y={Y(ingA(t))+16} fontSize="12" fontWeight="700" fill={C.success}>Ingreso</text>
+      </svg>);
+  }
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:12,marginBottom:18}}>
+        <div>
+          <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:800}}>En vivo · {fmtDate(hoy)} <span style={{fontSize:14,color:C.muted,fontWeight:600}}>{toHM(t)}:{pad2(new Date(t).getSeconds())}</span></h2>
+          <div style={{color:C.muted,fontSize:13}}>Cada aseadora cuesta ${porSeg.toFixed(1).replace(".",",")} por segundo ({fmtCOP(k.costoHoraPagada)} la hora) desde su primera entrada hasta las {k.finTurno}. El ingreso entra al cerrar cada apartamento, menos insumos, administración, lencería y el viaje de ropa a la lavandería (uno por edificio en el día).</div>
+        </div>
+        <div style={{display:"flex",background:C.surface,borderRadius:8,padding:4}}>
+          {[["aiu","Facturando con AIU"],["hoy","IVA sobre todo"]].map(([v,l])=><button key={v} onClick={()=>setModo(v)} style={{padding:"8px 12px",border:"none",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",background:modo===v?C.accent:"transparent",color:modo===v?"#0b0f18":C.muted}}>{l}</button>)}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:20}}>
+        {kpi("Costo del día (corriendo)",<span style={{color:C.danger}}>{fmtCOP(Math.round(tot.mo+tot.vari))}</span>,`${tot.corriendo} aseadora${tot.corriendo===1?"":"s"} en turno · ${fmtCOP(Math.round(porSeg*tot.corriendo*60))} por minuto`)}
+        {kpi("Ingreso cerrado",<span style={{color:C.success}}>{fmtCOP(Math.round(tot.ing))}</span>,`${(n=>`${n} apartamento${n===1?"":"s"} cerrado${n===1?"":"s"}`)(filas.reduce((s,f)=>s+f.cerrados,0))}${transpHoy?` · transporte ${fmtCOP(Math.round(transpHoy))}`:""}`)}
+        {kpi("Resultado del día",money(tot.res),tot.res>=0?"el día va ganando":"todavía no cubre el costo")}
+        {kpi("Por cerrar",fmtCOP(Math.round(activos.reduce((s,a)=>s+a.ing,0)+ingresoPend)),`${activos.length} en curso · ${pend.length} pendientes en agenda`)}
+      </div>
+      {grafica&&<Card style={{marginBottom:20}}>{grafica}</Card>}
+      {activos.length>0&&<>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Apartamentos en curso</h3>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12,marginBottom:20}}>
+          {activos.map(a=>(
+            <Card key={a.c.id} style={{padding:16,border:`1px solid ${a.margen>=0?C.border:C.danger}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8}}><div style={{fontWeight:800,fontSize:16}}>{a.c.apartmentName}</div><div style={{color:C.accent,fontWeight:800}}>{fmtMin((t-a.c.startedAt)/60000)}</div></div>
+              <div style={{fontSize:12,color:C.muted,margin:"2px 0 10px"}}>{a.c.employeeName} · entró {toHM(a.c.startedAt)}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:"4px 10px",fontSize:13}}>
+                <span style={{color:C.muted}}>Ingreso al cerrar</span><span>{fmtCOP(Math.round(a.ing))}</span>
+                <span style={{color:C.muted}}>Insumos, admin y lencería</span><span>–{fmtCOP(Math.round(a.vari-a.transp))}</span>
+                <span style={{color:C.muted}}>Transporte de ropa{!a.transp&&viajeDe(k,bldOf(a.c))?" (ya pagado hoy)":""}</span><span>{a.transp?`–${fmtCOP(Math.round(a.transp))}`:"$0"}</span>
+                <span style={{color:C.muted}}>Mano de obra hasta ahora</span><span style={{color:C.danger}}>–{fmtCOP(Math.round(a.mo))}</span>
+                <span style={{fontWeight:800}}>Margen si cierra ya</span><span>{money(a.margen)}</span>
+              </div>
+              <div style={{marginTop:10,fontSize:12,color:a.limite&&t<a.limite?C.success:C.danger,fontWeight:700}}>{a.limite?(t<a.limite?`Deja plata si cierra antes de las ${toHM(a.limite)}`:"Ya pasó la hora límite: este apartamento va en pérdida"):""}</div>
+            </Card>))}
+        </div>
+      </>}
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Por aseadora</h3>
+      <Card style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface}}>{["Aseadora","Ahora","Entró","En apartamentos","Tiempo muerto","Costo","Ingreso cerrado","Resultado"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>{filas.length===0?<tr><td colSpan={8} style={{...td,textAlign:"center",color:C.muted,padding:30}}>Nadie ha empezado hoy. El costo empieza a correr con la primera entrada.</td></tr>
+            :filas.map(f=>(
+            <tr key={f.emp} style={{borderTop:`1px solid ${C.border}`}}>
+              <td style={{...td,fontWeight:700}}>{f.emp}</td>
+              <td style={{...td,color:f.estado.color,fontWeight:700}}>{f.estado.txt}</td>
+              <td style={td}>{toHM(f.ini)}</td>
+              <td style={td}>{fmtMin(f.enApto/60)}</td>
+              <td style={{...td,color:f.muerto>60?C.danger:C.muted}}>{fmtMin(f.muerto/60)}</td>
+              <td style={{...td,color:C.danger}}>{fmtCOP(Math.round(f.costoMO+f.variables))}</td>
+              <td style={{...td,color:C.success}}>{fmtCOP(Math.round(f.ingreso))} <span style={{color:C.muted}}>({f.cerrados})</span></td>
+              <td style={td}>{money(f.resultado)}</td>
+            </tr>))}</tbody>
+        </table>
+      </div></Card>
+    </div>
+  );
+}
+
 // 📅 Agenda: qué apartamentos se limpian cada día, a quién se asignan y para qué hora
 function AgendaTab({appData,showToast}){
   const [fecha,setFecha]=useState(todayStr());
@@ -1787,10 +1936,14 @@ function TiemposTab({appData}){
   const aptOf=(c)=>appData.apartments.find(a=>a.id===c.apartmentId)||appData.apartments.find(a=>normTxt(a.displayName)===normTxt(c.apartmentName));
   // Por apartamento
   const apts=appData.apartments.filter(a=>!fClient||a.clientName===fClient);
+  // Promedio de apartamentos por viaje de ropa (mismo edificio, mismo día)
+  const porViaje={};
+  enRango.forEach(c=>{const b=aptOf(c)?.building||c.building||"";const o=porViaje[b]||(porViaje[b]={n:0,dias:new Set()});o.n++;o.dias.add(c.date);});
+  const transpApto=(a)=>{const v=viajeDe(k,a.building);if(!v)return 0;const o=porViaje[a.building];return o&&o.dias.size?v/(o.n/o.dias.size):v;};
   const aptRows=apts.map(a=>{
     const ts=timed.filter(c=>aptOf(c)?.id===a.id).map(durMin);
     const n=ts.length, avg=n?ts.reduce((s,x)=>s+x,0)/n:null;
-    const e=econ(a.price,avg,juegosOf(a),k);
+    const e=econ(a.price,avg,juegosOf(a),k,transpApto(a));
     return {a,n,avg,min:n?Math.min(...ts):null,max:n?Math.max(...ts):null,e,servicios:enRango.filter(c=>aptOf(c)?.id===a.id).length};
   }).filter(r=>r.servicios>0||r.n>0).sort((x,y)=>(y.n-x.n)||x.a.displayName.localeCompare(y.a.displayName));
   // Jornadas: aseadora + día, con tiempos muertos entre un apartamento y el siguiente
@@ -1909,6 +2062,7 @@ function CostosSection({appData,update,showToast}){
   const k0=getCosts(appData.settings);
   const [k,setK]=useState(k0);
   const fields=[
+    ["costoHoraPagada","Costo de una hora pagada de aseadora","Salario + prestaciones + recargos ÷ horas del mes (~182). Es lo que corre segundo a segundo en la pestaña En vivo"],
     ["costoHora","Costo de una hora productiva de aseadora","Salario + prestaciones + recargos, dividido por las horas que de verdad se trabajan"],
     ["lenceriaJuego","Costo de lavar un juego de lencería","Insumos, servicios, operaria de la lavandería y desgaste"],
     ["insumos","Productos, equipos y daños por servicio",""],
@@ -1916,7 +2070,9 @@ function CostosSection({appData,update,showToast}){
     ["aiuPct","AIU (% del valor sin IVA)","Mínimo 10%"],
     ["ivaPct","IVA (%)",""],
   ];
-  const save=()=>{ const c={...k}; fields.forEach(([f])=>{c[f]=Number(c[f])||0;}); update("settings",{...appData.settings,costs:c}); showToast("Costos guardados ✅"); };
+  const edificios=[...new Set(appData.apartments.map(a=>a.building).filter(Boolean))].sort();
+  const setViaje=(b,v)=>setK(p=>({...p,transporte:{...(p.transporte||{}),[b]:v}}));
+  const save=()=>{ const c={...k}; fields.forEach(([f])=>{c[f]=Number(c[f])||0;}); c.transporte=Object.fromEntries(Object.entries(k.transporte||{}).map(([b,v])=>[b,Number(v)||0])); update("settings",{...appData.settings,costs:c}); showToast("Costos guardados ✅"); };
   return(
     <Card style={{maxWidth:560}}>
       <h3 style={{margin:"0 0 6px",fontSize:15,fontWeight:700}}>Parámetros de costo</h3>
@@ -1924,6 +2080,14 @@ function CostosSection({appData,update,showToast}){
       {fields.map(([f,l,h])=>(
         <div key={f} style={{marginBottom:12}}><Lbl>{l}</Lbl><Inp type="number" value={k[f]} onChange={v=>setK(p=>({...p,[f]:v}))}/>{h&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>{h}</div>}</div>
       ))}
+      <div style={{marginBottom:12}}><Lbl>Hora de fin de turno</Lbl><Inp type="time" value={k.finTurno||"16:00"} onChange={v=>setK(p=>({...p,finTurno:v}))}/><div style={{fontSize:11,color:C.muted,marginTop:4}}>Hasta esta hora corre el costo de cada aseadora aunque no esté en un apartamento</div></div>
+      <div style={{margin:"18px 0 12px",paddingTop:14,borderTop:`1px solid ${C.border}`}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>🚚 Transporte de ropa a la lavandería</div>
+        <div style={{fontSize:11,color:C.muted,marginBottom:10}}>Lo que cuesta un viaje ida y vuelta (llevar la sucia y traer la limpia) desde cada edificio: taxi, moto, domicilio o el tiempo de quien la carga. Si queda a media cuadra, pon 0. Si ese día se hacen varios apartamentos del mismo edificio, el viaje se reparte entre ellos.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 150px",gap:"8px 12px",alignItems:"center"}}>
+          {edificios.map(b=>(<React.Fragment key={b}><div style={{fontSize:13}}>📍 {b}</div><Inp type="number" value={(k.transporte||{})[b]??""} onChange={v=>setViaje(b,v)} placeholder="0"/></React.Fragment>))}
+        </div>
+      </div>
       <label style={{display:"flex",gap:10,alignItems:"center",fontSize:13,margin:"6px 0 16px",cursor:"pointer"}}>
         <input type="checkbox" checked={!!k.preciosConIva} onChange={e=>setK(p=>({...p,preciosConIva:e.target.checked}))} style={{width:18,height:18}}/>Los precios de los apartamentos incluyen IVA
       </label>
