@@ -1034,7 +1034,7 @@ function CleaningHistoryEmployee({cleanings}){
 }
 
 function AdminView({appData,update,showToast,onLogout,tab,setTab}){
-  const tabs=[["dashboard","📊 Resumen"],["agenda","📅 Agenda"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["lenceria","🧺 Lencería"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
+  const tabs=[["dashboard","📊 Resumen"],["agenda","📅 Agenda"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["horas","🕒 Horas"],["lenceria","🧺 Lencería"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
   return(
     <div style={{minHeight:"100vh"}}>
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`}}>
@@ -1059,6 +1059,7 @@ function AdminView({appData,update,showToast,onLogout,tab,setTab}){
         {tab==="cleanings"&&<CleaningsTab appData={appData} update={update} showToast={showToast}/>}
         {tab==="agenda"   &&<AgendaTab    appData={appData} showToast={showToast}/>}
         {tab==="tiempos"  &&<TiemposTab   appData={appData}/>}
+        {tab==="horas"    &&<HorasTab     appData={appData}/>}
         {tab==="lenceria" &&<LenceriaTab  appData={appData}/>}
         {tab==="clients"  &&<ClientsTab   appData={appData} update={update} showToast={showToast}/>}
         {tab==="config"   &&<ConfigTab    appData={appData} update={update} showToast={showToast}/>}
@@ -1674,6 +1675,99 @@ function LenceriaTab({appData}){
             </tr>))}</tbody>
         </table>
       </div></Card>
+    </div>
+  );
+}
+
+// 🕒 Horas: corte quincenal por aseadora y día (entrada, salida, horas y tiempo muerto)
+const lastDayOf = (y,m) => new Date(y, m, 0).getDate(); // m: 1-12
+const quincenaDe = (iso) => { const [y,m,d]=iso.split("-").map(Number); return d<=15?[`${y}-${pad2(m)}-01`,`${y}-${pad2(m)}-15`]:[`${y}-${pad2(m)}-16`,`${y}-${pad2(m)}-${pad2(lastDayOf(y,m))}`]; };
+const ultimaQuincenaCerrada = () => { const t=new Date(); const y=t.getFullYear(), m=t.getMonth()+1, d=t.getDate();
+  if(d<=15){ const pm=m===1?12:m-1, py=m===1?y-1:y; return [`${py}-${pad2(pm)}-16`,`${py}-${pad2(pm)}-${pad2(lastDayOf(py,pm))}`]; }
+  return [`${y}-${pad2(m)}-01`,`${y}-${pad2(m)}-15`]; };
+// Una fila por aseadora y día
+const jornadasDe = (cleanings, desde, hasta) => {
+  const g={};
+  cleanings.filter(c=>c.date>=desde&&c.date<=hasta).forEach(c=>{const k=(c.employeeName||"SIN NOMBRE")+"|"+c.date;(g[k]=g[k]||[]).push(c);});
+  return Object.entries(g).map(([k,list])=>{
+    const [emp,date]=k.split("|");
+    const t=list.filter(c=>c.startedAt&&c.finishedAt&&c.finishedAt>c.startedAt).sort((a,b)=>a.startedAt-b.startedAt);
+    let horas=0, muerto=0;
+    t.forEach((c,i)=>{ horas+=(c.finishedAt-c.startedAt)/60000; if(i>0){ const gap=(c.startedAt-t[i-1].finishedAt)/60000; if(gap>0&&gap<240) muerto+=gap; } });
+    return {emp,date,aptos:list.length,medidos:t.length,sinHora:list.length-t.length,
+      entrada:t.length?t[0].startedAt:null, salida:t.length?Math.max(...t.map(c=>c.finishedAt)):null,
+      jornada:t.length?(Math.max(...t.map(c=>c.finishedAt))-t[0].startedAt)/60000:0, horas, muerto};
+  }).sort((a,b)=>a.emp.localeCompare(b.emp)||a.date.localeCompare(b.date));
+};
+const hDec = (min) => (min/60).toFixed(2).replace(".",",");
+const corteCSV = (rows) => {
+  const head=["Aseadora","Fecha","Entrada","Salida","Jornada (h)","Horas en apartamentos (h)","Tiempo muerto (h)","Apartamentos","Registros sin hora"];
+  const lines=rows.map(r=>[r.emp,fmtDate(r.date),toHM(r.entrada),toHM(r.salida),hDec(r.jornada),hDec(r.horas),hDec(r.muerto),r.aptos,r.sinHora].join(";"));
+  return "\ufeff"+[head.join(";"),...lines].join("\r\n");
+};
+
+function HorasTab({appData}){
+  const [q0,q1]=ultimaQuincenaCerrada();
+  const [desde,setDesde]=useState(q0);
+  const [hasta,setHasta]=useState(q1);
+  const rows=jornadasDe(appData.cleanings,desde,hasta);
+  const emps=[...new Set(rows.map(r=>r.emp))];
+  const setQ=(r)=>{setDesde(r[0]);setHasta(r[1]);};
+  const actual=quincenaDe(todayStr());
+  const descargar=()=>{
+    try{
+      const blob=new Blob([corteCSV(rows)],{type:"text/csv;charset=utf-8"});
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`horas_${desde}_a_${hasta}.csv`; document.body.appendChild(a); a.click(); a.remove();
+    }catch(e){ console.error(e); }
+  };
+  const th={textAlign:"left",padding:"9px 12px",color:C.muted,fontWeight:700,whiteSpace:"nowrap",fontSize:12};
+  const td={padding:"9px 12px",whiteSpace:"nowrap"};
+  return(
+    <div>
+      <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:800}}>Horas por quincena</h2>
+      <div style={{color:C.muted,fontSize:13,marginBottom:18}}>Entrada = primera limpieza del día, salida = última. Las horas salen del cronómetro de cada apartamento; los registros sin hora se cuentan aparte.</div>
+      <Card style={{marginBottom:16,display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
+        <div><Lbl>Desde</Lbl><Inp type="date" value={desde} onChange={setDesde}/></div>
+        <div><Lbl>Hasta</Lbl><Inp type="date" value={hasta} onChange={setHasta}/></div>
+        <Btn variant={desde===q0&&hasta===q1?"primary":"ghost"} onClick={()=>setQ([q0,q1])}>Última quincena cerrada</Btn>
+        <Btn variant={desde===actual[0]&&hasta===actual[1]?"primary":"ghost"} onClick={()=>setQ(actual)}>Quincena actual</Btn>
+        <div style={{marginLeft:"auto"}}><Btn variant="success" onClick={descargar} disabled={!rows.length}>⬇ Descargar Excel</Btn></div>
+      </Card>
+      {emps.length===0&&<Card style={{textAlign:"center",color:C.muted,padding:40}}>No hay limpiezas en estas fechas</Card>}
+      {emps.map(emp=>{
+        const rs=rows.filter(r=>r.emp===emp);
+        const tot=rs.reduce((a,r)=>({j:a.j+r.jornada,h:a.h+r.horas,m:a.m+r.muerto,n:a.n+r.aptos,s:a.s+r.sinHora}),{j:0,h:0,m:0,n:0,s:0});
+        return(
+          <Card key={emp} style={{padding:0,overflow:"hidden",marginBottom:18}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{fontWeight:800,fontSize:16}}>👤 {emp}</div>
+              <div style={{display:"flex",gap:18,flexWrap:"wrap",fontSize:13}}>
+                <span style={{color:C.muted}}>Días <b style={{color:C.text}}>{rs.length}</b></span>
+                <span style={{color:C.muted}}>Jornada <b style={{color:C.text}}>{fmtMin(tot.j)}</b></span>
+                <span style={{color:C.muted}}>En apartamentos <b style={{color:C.success}}>{fmtMin(tot.h)}</b></span>
+                <span style={{color:C.muted}}>Tiempo muerto <b style={{color:tot.m?C.danger:C.muted}}>{fmtMin(tot.m)}</b></span>
+                <span style={{color:C.muted}}>Apartamentos <b style={{color:C.text}}>{tot.n}</b>{tot.s?<span style={{color:C.accent}}> ({tot.s} sin hora)</span>:null}</span>
+              </div>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr style={{background:C.surface}}>{["Fecha","Entrada","Salida","Jornada","En apartamentos","Tiempo muerto","Apartamentos","Sin hora"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+                <tbody>{rs.map(r=>(
+                  <tr key={r.date} style={{borderTop:`1px solid ${C.border}`}}>
+                    <td style={{...td,color:C.muted}}>{fmtDate(r.date)}</td>
+                    <td style={td}>{toHM(r.entrada)||"—"}</td>
+                    <td style={td}>{toHM(r.salida)||"—"}</td>
+                    <td style={td}>{r.medidos?fmtMin(r.jornada):"—"}</td>
+                    <td style={{...td,color:C.success,fontWeight:700}}>{r.medidos?fmtMin(r.horas):"—"}</td>
+                    <td style={{...td,color:r.muerto?C.danger:C.muted,fontWeight:700}}>{r.medidos>1?fmtMin(r.muerto):"—"}</td>
+                    <td style={td}>{r.aptos}</td>
+                    <td style={{...td,color:r.sinHora?C.accent:C.muted}}>{r.sinHora||""}</td>
+                  </tr>))}</tbody>
+              </table>
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 }
