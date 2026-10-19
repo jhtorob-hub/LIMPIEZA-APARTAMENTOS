@@ -146,6 +146,9 @@ const findDuplicates = (cleanings) => {
 const APT_TYPES = { estudio:"Estudio", "1hab":"1 habitación", "2-3hab":"2–3 habitaciones" };
 const DEFAULT_JUEGOS = { estudio:1, "1hab":1, "2-3hab":2.5 };
 // Parámetros de costo por defecto (se editan en Config → Costos)
+// Por ahora la agenda no se asigna: cada aseadora elige de la lista del día el apartamento que va a hacer.
+// Para volver a asignar desde el admin, poner en true.
+const ASIGNAR_AGENDA = false;
 const DEFAULT_COSTS = { costoHora:20700, costoHoraPagada:16200, finTurno:"16:00", lenceriaJuego:8000, insumos:5200, admin:5000, aiuPct:10, ivaPct:19, preciosConIva:true };
 const ZONAS_PROFUNDAS = ["Nevera y horno","Juntas y cortina del baño","Detrás y debajo de muebles","Vidrios, marcos y ventanas","Colchón, cortinas y lámparas"];
 const checklistFor = (tipo) => {
@@ -661,6 +664,21 @@ function EmployeeView({appData,update,showToast,onLogout}){
     if(!CLEANINGS_COL){ showToast("Sin conexión con la base de datos","error"); return; }
     if(active){ showToast(`Primero termina ${active.apartmentName}`,"error"); return; }
     if(!okToSave(hoy,apt)) return;
+    // Si está en la agenda, se "toma" con una transacción para que dos personas no empiecen el mismo
+    const enAgenda=(appData.agenda||[]).some(a=>a.date===hoy&&a.apartmentId===apt.id);
+    if(enAgenda&&AGENDA_COL&&db){
+      setSaving(true);
+      const ref=AGENDA_COL.doc(`${hoy}_${apt.id}`);
+      try{
+        const quien=await db.runTransaction(async tx=>{
+          const d=await tx.get(ref); const x=d.exists?d.data():{};
+          const otra=x.tomadoPor&&x.tomadoPor!==employee&&((Date.now()-(x.tomadoAt||0))<120000||appData.cleanings.some(c=>c.date===hoy&&c.apartmentId===apt.id&&c.employeeName===x.tomadoPor));
+          if(otra) return x.tomadoPor;
+          tx.set(ref,{tomadoPor:employee,tomadoAt:Date.now()},{merge:true}); return null;
+        });
+        if(quien){ setSaving(false); setAbierta(null); showToast(`${nombreBonito(quien)} ya tomó ${apt.displayName}`,"error"); return; }
+      }catch(e){ console.error(e); }
+    }
     setSaving(true);
     const loc=await getPos();
     const ts=Date.now();
@@ -737,7 +755,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
   if(active) return <CleaningWizard active={active} now={now} saving={saving} activeNotes={activeNotes} setActiveNotes={setActiveNotes} toggleCheck={toggleCheck} finishCleaning={finishCleaning} showToast={showToast}/>;
 
   // 3) Lista del día
-  const agendaHoy=(appData.agenda||[]).filter(a=>a.date===hoy&&(!a.asignadaA||a.asignadaA===employee));
+  const agendaHoy=(appData.agenda||[]).filter(a=>a.date===hoy&&(!ASIGNAR_AGENDA||!a.asignadaA||a.asignadaA===employee));
   const estadoDe=(item)=>{
     const cs=appData.cleanings.filter(c=>c.date===hoy&&(c.apartmentId===item.apartmentId||normTxt(c.apartmentName)===normTxt(item.apartmentName)));
     const run=cs.find(c=>c.enCurso); if(run) return {k:"curso",c:run};
@@ -778,7 +796,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
       {lista.length===0&&(
         <div style={{...wCard,textAlign:"center",padding:"28px 18px",marginBottom:12}}>
           <div style={{fontSize:34}}>🗓️</div>
-          <div style={{fontWeight:800,fontSize:17,marginTop:6}}>No tienes apartamentos programados</div>
+          <div style={{fontWeight:800,fontSize:17,marginTop:6}}>No hay apartamentos programados hoy</div>
           <div style={{fontSize:14,color:W.muted,marginTop:4}}>Pídele la lista a coordinación o empieza uno que no esté en la lista.</div>
         </div>
       )}
@@ -795,7 +813,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
                 <div style={{fontSize:13,color:W.muted,marginTop:2}}>{it.clientName||"—"}{apt.tipo?` · ${APT_TYPES[apt.tipo]}`:""}</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
                   {st.k==="pendiente"&&it.checkIn&&badge(`⏰ Listo antes de las ${hm12(it.checkIn)}`,W.amberSoft,W.amber)}
-                  {st.k==="pendiente"&&it.asignadaA&&badge("Asignado a ti",W.blueSoft,W.blue)}
+                  {ASIGNAR_AGENDA&&st.k==="pendiente"&&it.asignadaA&&badge("Asignado a ti",W.blueSoft,W.blue)}
                   {st.k==="curso"&&badge(`⏱ En curso · ${nombreBonito(st.c.employeeName)}`,W.amberSoft,W.amber)}
                   {st.k==="hecho"&&badge(`✓ Hecho${durMin(st.c)!=null?` en ${fmtMin(durMin(st.c))}`:""} · ${nombreBonito(st.c.employeeName)}`,W.brandSoft,W.brand)}
                 </div>
@@ -1695,7 +1713,7 @@ function AgendaTab({appData,showToast}){
   return(
     <div>
       <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:800}}>Agenda de limpiezas</h2>
-      <div style={{color:C.muted,fontSize:13,marginBottom:18}}>Lo que pongas aquí es la lista que ve cada aseadora en su celular. Sin asignar = la ven todas.</div>
+      <div style={{color:C.muted,fontSize:13,marginBottom:18}}>{ASIGNAR_AGENDA?"Lo que pongas aquí es la lista que ve cada aseadora en su celular. Sin asignar = la ven todas.":"Lo que pongas aquí lo ven todas las aseadoras en su celular. Cada una elige el apartamento que va a hacer y, en cuanto lo empieza, a las demás les aparece como tomado."}</div>
       <Card style={{marginBottom:16,display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
         <div style={{minWidth:180}}><Lbl>Fecha</Lbl><Inp type="date" value={fecha} onChange={setFecha}/></div>
         <Btn variant={fecha===todayStr()?"primary":"ghost"} onClick={()=>setFecha(todayStr())}>Hoy</Btn>
@@ -1704,15 +1722,15 @@ function AgendaTab({appData,showToast}){
       </Card>
       <Card style={{padding:0,overflow:"hidden",marginBottom:20}}><div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-          <thead><tr style={{background:C.surface}}>{["Apartamento","Cliente","Check-in","Asignada a","Nota para la aseadora","Estado",""].map(h=><th key={h} style={{textAlign:"left",padding:"10px 12px",color:C.muted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+          <thead><tr style={{background:C.surface}}>{["Apartamento","Cliente","Check-in",...(ASIGNAR_AGENDA?["Asignada a"]:[]),"Nota para la aseadora","Estado",""].map(h=><th key={h} style={{textAlign:"left",padding:"10px 12px",color:C.muted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
           <tbody>
-            {items.length===0?<tr><td colSpan={7} style={{textAlign:"center",padding:30,color:C.muted}}>No hay apartamentos en la agenda de este día. Agrégalos abajo.</td></tr>
+            {items.length===0?<tr><td colSpan={ASIGNAR_AGENDA?7:6} style={{textAlign:"center",padding:30,color:C.muted}}>No hay apartamentos en la agenda de este día. Agrégalos abajo.</td></tr>
             :items.map(it=>(
               <tr key={it.id} style={{borderTop:`1px solid ${C.border}`}}>
                 <td style={{padding:"10px 12px",fontWeight:700,whiteSpace:"nowrap"}}>{it.apartmentName}</td>
                 <td style={{padding:"10px 12px",color:C.info}}>{it.clientName||"—"}</td>
                 <td style={{padding:"10px 12px"}}><input type="time" defaultValue={it.checkIn||""} onBlur={e=>e.target.value!==(it.checkIn||"")&&upd(it.id,"checkIn",e.target.value)} style={sm}/></td>
-                <td style={{padding:"10px 12px"}}><select value={it.asignadaA||""} onChange={e=>upd(it.id,"asignadaA",e.target.value)} style={sm}><option value="">Sin asignar</option>{appData.employees.map(e=><option key={e} value={e}>{e}</option>)}</select></td>
+                {ASIGNAR_AGENDA&&<td style={{padding:"10px 12px"}}><select value={it.asignadaA||""} onChange={e=>upd(it.id,"asignadaA",e.target.value)} style={sm}><option value="">Sin asignar</option>{appData.employees.map(e=><option key={e} value={e}>{e}</option>)}</select></td>}
                 <td style={{padding:"10px 12px"}}><input defaultValue={it.nota||""} placeholder="Ej: llave en portería" onBlur={e=>e.target.value!==(it.nota||"")&&upd(it.id,"nota",e.target.value)} style={{...sm,width:200}}/></td>
                 <td style={{padding:"10px 12px",whiteSpace:"nowrap"}}>{estado(it)}</td>
                 <td style={{padding:"10px 12px",textAlign:"right"}}><Btn variant="ghost" size="sm" onClick={()=>quitar(it)}>Quitar</Btn></td>
