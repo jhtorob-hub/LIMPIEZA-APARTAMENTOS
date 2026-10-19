@@ -49,7 +49,7 @@
 const { useState, useEffect, useRef } = React;
 
 // Firebase init (protegido)
-let db=null, DOC_REF=null, CLEANINGS_COL=null, APARTMENTS_COL=null, FIREBASE_OK=false, STORAGE=null;
+let db=null, DOC_REF=null, CLEANINGS_COL=null, APARTMENTS_COL=null, AGENDA_COL=null, FIREBASE_OK=false, STORAGE=null;
 try {
   if (!firebase.apps.length) { firebase.initializeApp({
     apiKey: "AIzaSyDBSqHoAc_qDQQhrOmDtdcZ7ZyyPbXv5Sg",
@@ -66,6 +66,8 @@ try {
   // al mismo tiempo, nadie le pisa el cambio al otro.
   CLEANINGS_COL = DOC_REF.collection("cleanings_log");
   APARTMENTS_COL = DOC_REF.collection("apartments_log");
+  // Agenda: qué apartamentos se limpian cada día (un documento por fecha + apartamento)
+  AGENDA_COL = DOC_REF.collection("agenda");
   FIREBASE_OK = true;
   // Almacenamiento de videos (Firebase Storage). Si no carga, la app sigue funcionando sin videos.
   try { STORAGE = firebase.storage(); } catch(e) { console.error("Storage no disponible:", e); }
@@ -244,6 +246,29 @@ function LoginView({loginRole,setLoginRole,pw,setPw,error,onLogin}){
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════
+//  VISTA DE LA ASEADORA — tema claro, botones grandes, pensada para el celular
+// ════════════════════════════════════════════════════════════════════════
+const W = { bg:"#F3F5F2", card:"#FFFFFF", ink:"#15201B", muted:"#66736C", line:"#E1E6E2",
+  brand:"#0E7C66", brandSoft:"#E2F1EC", amber:"#C98A0C", amberSoft:"#FCF1DC", red:"#C94040", redSoft:"#FBE8E8", blue:"#2B63D9", blueSoft:"#E7EEFD" };
+const DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const fechaLarga = (d=new Date()) => `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
+const hm12 = (hm) => { if(!hm) return ""; const [h,m]=hm.split(":").map(Number); const ap=h>=12?"p. m.":"a. m."; return `${((h+11)%12)+1}:${pad2(m)} ${ap}`; };
+const nombreBonito = (n) => (n||"").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
+function WBtn({children,onClick,kind="primary",disabled,style:ex={}}){
+  const k={
+    primary:{background:W.brand,color:"#fff",border:"none"},
+    secondary:{background:W.card,color:W.ink,border:`1.5px solid ${W.line}`},
+    danger:{background:W.red,color:"#fff",border:"none"},
+    ghost:{background:"transparent",color:W.muted,border:"none"},
+  }[kind];
+  return <button onClick={onClick} disabled={disabled} style={{...k,minHeight:54,padding:"14px 18px",borderRadius:16,fontSize:16,fontWeight:800,fontFamily:"inherit",cursor:disabled?"default":"pointer",opacity:disabled?0.5:1,width:"100%",letterSpacing:"-0.01em",...ex}}>{children}</button>;
+}
+const wCard = { background:W.card, border:`1px solid ${W.line}`, borderRadius:20, padding:18, boxShadow:"0 1px 2px rgba(20,32,27,0.04)" };
+const wInput = { width:"100%", padding:"13px 14px", background:W.card, border:`1.5px solid ${W.line}`, borderRadius:12, color:W.ink, fontSize:16, outline:"none", boxSizing:"border-box", fontFamily:"inherit" };
+
 // ── Fotos (comprimidas, guardadas en una subcolección de cada limpieza) ──
 const FOTOS_FINALES = [["cama","Cama tendida"],["bano","Baño"],["cocina","Cocina"],["sala","Sala"],["zona","Zona profunda"]];
 const compressImage = (file, maxW=900, q=0.6) => new Promise((res, rej) => {
@@ -262,7 +287,7 @@ const compressImage = (file, maxW=900, q=0.6) => new Promise((res, rej) => {
   r.onerror = rej; r.readAsDataURL(file);
 });
 
-function FotoSlot({cleaningId,k,label,has,thumb,showToast,big}){
+function FotoSlot({cleaningId,k,label,has,thumb,showToast}){
   const [busy,setBusy]=useState(false);
   const onFile=async(e)=>{
     const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return;
@@ -277,16 +302,19 @@ function FotoSlot({cleaningId,k,label,has,thumb,showToast,big}){
     finally{ setBusy(false); }
   };
   return(
-    <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:10,minHeight:big?150:110,border:`2px ${has?"solid":"dashed"} ${has?C.success:C.border}`,borderRadius:12,cursor:"pointer",background:C.surface,textAlign:"center"}}>
-      {thumb?<img src={thumb} alt={label} style={{width:"100%",maxHeight:big?160:90,objectFit:"cover",borderRadius:8}}/>:<span style={{fontSize:big?36:28}}>📷</span>}
-      <span style={{fontSize:13,fontWeight:700,color:C.text}}>{label}</span>
-      <span style={{fontSize:11,fontWeight:700,color:busy?C.accent:has?C.success:C.muted}}>{busy?"Guardando...":has?"✓ Lista (toca para cambiar)":"Toca para tomar la foto"}</span>
+    <label style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,minHeight:150,borderRadius:18,cursor:"pointer",overflow:"hidden",textAlign:"center",
+      background:thumb?"#000":W.card,border:has?`2px solid ${W.brand}`:`2px dashed ${W.line}`}}>
+      {thumb?<img src={thumb} alt={label} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.9}}/>:<span style={{fontSize:34}}>📷</span>}
+      <div style={{position:thumb?"absolute":"static",left:0,right:0,bottom:0,padding:thumb?"18px 10px 10px":"0 8px",background:thumb?"linear-gradient(transparent,rgba(0,0,0,0.7))":"none"}}>
+        <div style={{fontSize:14,fontWeight:800,color:thumb?"#fff":W.ink}}>{label}</div>
+        <div style={{fontSize:12,fontWeight:700,marginTop:2,color:busy?W.amber:thumb?"#d9f3ea":has?W.brand:W.muted}}>{busy?"Guardando…":has?"✓ Lista · tocar para cambiar":"Tocar para tomar"}</div>
+      </div>
       <input type="file" accept="image/*" capture="environment" onChange={onFile} style={{display:"none"}}/>
     </label>
   );
 }
 
-// ── Video de entrada / salida: se graba dentro de la app (máx. 4 min, 480p) y se sube a Firebase Storage ──
+// ── Video de ingreso / salida: se graba dentro de la app (máx. 4 min, 480p) y se sube a Firebase Storage ──
 const VIDEO_MAX_SEG = 240;
 const mmss = (s) => `${Math.floor((s||0)/60)}:${pad2(Math.floor((s||0)%60))}`;
 const pickMime = () => {
@@ -295,8 +323,8 @@ const pickMime = () => {
   return "";
 };
 
-function VideoPaso({cleaningId,k,label,video,showToast}){
-  const [mode,setMode]=useState("idle"); // idle | recording | uploading | error
+function VideoPaso({cleaningId,k,label,video,showToast,autoStart,onDone}){
+  const [mode,setMode]=useState("idle"); // idle | starting | recording | uploading | error
   const [secs,setSecs]=useState(0);
   const [prog,setProg]=useState(0);
   const liveRef=useRef(null), recRef=useRef(null), streamRef=useRef(null), chunksRef=useRef([]), blobRef=useRef(null), timerRef=useRef(null), startRef=useRef(0);
@@ -319,10 +347,12 @@ function VideoPaso({cleaningId,k,label,video,showToast}){
           const url=await ref.getDownloadURL();
           await CLEANINGS_COL.doc(cleaningId).update({[`videos.${k}`]:{url,path:ref.fullPath,dur:v.dur,size:v.blob.size,ts:Date.now()}});
           blobRef.current=null; setMode("idle"); showToast(`🎥 ${label}: subido ✅`);
+          onDone&&onDone();
         }catch(e){ console.error(e); setMode("error"); showToast("El video subió pero no se pudo registrar. Toca Reintentar.","error"); }
       });
   };
   const startRec=async()=>{
+    setMode("starting");
     try{
       const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:854},height:{ideal:480},frameRate:{ideal:24}},audio:true});
       streamRef.current=st;
@@ -338,363 +368,437 @@ function VideoPaso({cleaningId,k,label,video,showToast}){
       };
       recRef.current=rec; rec.start(1000); startRef.current=Date.now(); setSecs(0); setMode("recording");
       timerRef.current=setInterval(()=>{ const s=Math.floor((Date.now()-startRef.current)/1000); setSecs(s); if(s>=VIDEO_MAX_SEG&&rec.state==="recording") rec.stop(); },500);
-    }catch(e){ console.error(e); stopStream(); showToast("No se pudo abrir la cámara. Revisa los permisos del navegador.","error"); }
+    }catch(e){ console.error(e); stopStream(); setMode("idle"); showToast("No se pudo abrir la cámara. Revisa los permisos del navegador.","error"); }
   };
+  useEffect(()=>{ if(autoStart&&!video&&canRecord) startRec(); },[]);
   const stopRec=()=>{ try{ if(recRef.current&&recRef.current.state==="recording") recRef.current.stop(); }catch(e){} };
-  // Solo si el celular no permite grabar dentro de la app
   const onFile=(e)=>{
     const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return;
     if(f.size>40*1024*1024){ showToast("El video pesa más de 40 MB. Grábalo más corto.","error"); return; }
     blobRef.current={blob:f,dur:null}; upload();
   };
-  const bigBtn={width:"100%",padding:"16px",fontSize:16};
+  const frame={position:"relative",borderRadius:20,overflow:"hidden",background:"#0d1210",height:"42vh",minHeight:240,width:"100%"};
+  const pct=Math.min(100,secs/VIDEO_MAX_SEG*100);
   return(
     <div>
-      {mode==="recording"&&(
+      {(mode==="recording"||mode==="starting")&&(
         <div>
-          <video ref={liveRef} muted playsInline autoPlay style={{width:"100%",borderRadius:10,background:"#000",display:"block",maxHeight:300,objectFit:"cover"}}/>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"10px 0"}}>
-            <span style={{color:C.danger,fontWeight:800}}>● Grabando {mmss(secs)}</span>
-            <span style={{color:C.muted,fontSize:12}}>máximo {mmss(VIDEO_MAX_SEG)}</span>
+          <div style={frame}>
+            <video ref={liveRef} muted playsInline autoPlay style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+            <div style={{position:"absolute",top:12,left:12,display:"flex",alignItems:"center",gap:8,background:"rgba(0,0,0,0.55)",color:"#fff",padding:"6px 12px",borderRadius:999,fontWeight:800,fontSize:15}}>
+              <span style={{width:10,height:10,borderRadius:"50%",background:mode==="recording"?"#ff4d4d":"#999"}}/>{mode==="recording"?mmss(secs):"Abriendo cámara…"}
+            </div>
+            <div style={{position:"absolute",left:0,right:0,bottom:0,height:6,background:"rgba(255,255,255,0.2)"}}><div style={{width:`${pct}%`,height:"100%",background:"#ff4d4d"}}/></div>
           </div>
-          <Btn variant="danger" onClick={stopRec} style={bigBtn}>■ Detener y subir</Btn>
+          <div style={{fontSize:13,color:W.muted,textAlign:"center",margin:"10px 0"}}>Máximo {mmss(VIDEO_MAX_SEG)} · se corta solo</div>
+          <WBtn kind="danger" onClick={stopRec} disabled={mode!=="recording"}>■ Detener y subir</WBtn>
         </div>
       )}
       {mode==="uploading"&&(
-        <div style={{padding:"14px 0"}}>
-          <div style={{fontWeight:700,marginBottom:8}}>Subiendo {label.toLowerCase()}… {prog}%</div>
-          <div style={{height:10,background:C.surface,borderRadius:6,overflow:"hidden"}}><div style={{width:`${prog}%`,height:"100%",background:C.accent,transition:"width 0.3s"}}/></div>
-          <div style={{fontSize:12,color:C.muted,marginTop:8}}>No cierres la app. Puedes seguir con el checklist mientras sube.</div>
+        <div style={{...wCard,textAlign:"center"}}>
+          <div style={{fontSize:34}}>☁️</div>
+          <div style={{fontWeight:800,fontSize:17,marginTop:6}}>Subiendo {label.toLowerCase()} · {prog}%</div>
+          <div style={{height:10,background:W.bg,borderRadius:6,overflow:"hidden",margin:"12px 0"}}><div style={{width:`${prog}%`,height:"100%",background:W.brand,transition:"width 0.3s"}}/></div>
+          <div style={{fontSize:13,color:W.muted}}>No cierres la app. Puedes seguir con el siguiente paso mientras sube.</div>
         </div>
       )}
       {mode==="error"&&(
-        <div style={{padding:"10px 0"}}>
-          <div style={{color:C.danger,fontWeight:700,marginBottom:10}}>No se pudo subir el video.</div>
-          <Btn onClick={upload} style={bigBtn}>↻ Reintentar subida</Btn>
-          <div style={{textAlign:"center",marginTop:8}}><button onClick={()=>{blobRef.current=null;setMode("idle");}} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:12,textDecoration:"underline"}}>Descartar y grabar de nuevo</button></div>
+        <div style={{...wCard,borderColor:W.red,textAlign:"center"}}>
+          <div style={{color:W.red,fontWeight:800,marginBottom:12}}>No se pudo subir el video</div>
+          <WBtn onClick={upload}>↻ Reintentar subida</WBtn>
+          <WBtn kind="ghost" onClick={()=>{blobRef.current=null;setMode("idle");}} style={{minHeight:40,fontSize:14,marginTop:4}}>Descartar y grabar de nuevo</WBtn>
         </div>
       )}
       {mode==="idle"&&video&&(
         <div>
-          <video src={video.url} controls playsInline preload="metadata" style={{width:"100%",borderRadius:10,background:"#000",display:"block",maxHeight:300}}/>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8,gap:8}}>
-            <span style={{color:C.success,fontWeight:700,fontSize:13}}>✓ Subido{video.dur?` · ${mmss(video.dur)}`:""}{video.size?` · ${(video.size/1048576).toFixed(1)} MB`:""}</span>
-            {canRecord&&<Btn variant="ghost" size="sm" onClick={startRec}>Volver a grabar</Btn>}
+          <video src={video.url} controls playsInline preload="metadata" style={{width:"100%",borderRadius:20,background:"#000",display:"block",maxHeight:"50vh"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:8}}>
+            <span style={{color:W.brand,fontWeight:800,fontSize:14}}>✓ Subido{video.dur?` · ${mmss(video.dur)}`:""}{video.size?` · ${(video.size/1048576).toFixed(1)} MB`:""}</span>
+            {canRecord&&<button onClick={startRec} style={{background:"transparent",border:"none",color:W.muted,fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Volver a grabar</button>}
           </div>
         </div>
       )}
       {mode==="idle"&&!video&&(canRecord
-        ?<Btn onClick={startRec} style={bigBtn}>🎥 Grabar {label.toLowerCase()} (máx. 4 min)</Btn>
-        :<label style={{display:"block",textAlign:"center",padding:16,border:`2px dashed ${C.border}`,borderRadius:12,cursor:"pointer",fontWeight:700}}>🎥 Grabar {label.toLowerCase()}<input type="file" accept="video/*" capture="environment" onChange={onFile} style={{display:"none"}}/></label>)}
+        ?<button onClick={startRec} style={{...frame,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,border:"none",cursor:"pointer",color:"#fff",fontFamily:"inherit"}}>
+            <span style={{width:84,height:84,borderRadius:"50%",border:"5px solid #fff",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{width:60,height:60,borderRadius:"50%",background:"#ff4d4d"}}/></span>
+            <span style={{fontWeight:800,fontSize:18}}>Grabar {label.toLowerCase()}</span>
+            <span style={{fontSize:13,opacity:0.75}}>Máximo 4 minutos</span>
+          </button>
+        :<label style={{...frame,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",color:"#fff"}}>
+            <span style={{fontSize:44}}>🎥</span><span style={{fontWeight:800,fontSize:18}}>Grabar {label.toLowerCase()}</span>
+            <input type="file" accept="video/*" capture="environment" onChange={onFile} style={{display:"none"}}/>
+          </label>)}
     </div>
   );
 }
 
-function PasoHeader({n,title,done,sub}){
-  return(
-    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-      <div style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,flexShrink:0,background:done?C.success:C.accent,color:"#0b0f18"}}>{done?"✓":n}</div>
-      <div><div style={{fontWeight:800,fontSize:16}}>{title}</div>{sub&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div>}</div>
-    </div>
-  );
-}
-
-// Pantalla paso a paso de la limpieza en curso
-function ActiveCleaning({active,now,saving,activeNotes,setActiveNotes,toggleCheck,finishCleaning,showToast}){
-  const [thumbs,setThumbs]=useState({});
-  useEffect(()=>{
-    const u=CLEANINGS_COL.doc(active.id).collection("fotos").onSnapshot(s=>{const m={};s.forEach(d=>{m[d.id]=d.data().data;});setThumbs(m);},e=>console.error(e));
-    return ()=>u();
-  },[active.id]);
+// ── Asistente paso a paso de una limpieza en curso ──
+const PASOS = ["Ingreso","Limpieza","Fotos","Salida"];
+function CleaningWizard({active,now,saving,activeNotes,setActiveNotes,toggleCheck,finishCleaning,showToast}){
   const fotos=active.fotos||{}, cl=active.checklist||{}, videos=active.videos||{};
   const items=checklistFor(active.tipo);
   const doneItems=items.filter((_,i)=>cl["i"+i]).length+(cl.zona?1:0);
   const totalItems=items.length+1;
   const fotosHechas=FOTOS_FINALES.filter(([k])=>fotos[k]).length;
-  const box={background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:16,marginBottom:14};
+  const listo=[!!videos.entrada, doneItems===totalItems, fotosHechas===FOTOS_FINALES.length, !!videos.salida];
+  const [step,setStep]=useState(()=>!videos.entrada?0:doneItems<totalItems?1:fotosHechas<FOTOS_FINALES.length?2:3);
+  const [thumbs,setThumbs]=useState({});
+  useEffect(()=>{
+    const u=CLEANINGS_COL.doc(active.id).collection("fotos").onSnapshot(s=>{const m={};s.forEach(d=>{m[d.id]=d.data().data;});setThumbs(m);},e=>console.error(e));
+    return ()=>u();
+  },[active.id]);
+  useEffect(()=>{ try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(e){} },[step]);
+  const title={fontSize:22,fontWeight:800,letterSpacing:"-0.02em",margin:"0 0 4px"};
+  const sub={fontSize:14,color:W.muted,margin:"0 0 16px",lineHeight:1.45};
   return(
-    <div style={{marginBottom:20}}>
-      <div style={{...box,border:`2px solid ${C.accent}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
-          <div>
-            <div style={{fontSize:12,color:C.accent,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.05em"}}>⏱ Limpieza en curso</div>
-            <div style={{fontSize:22,fontWeight:800,marginTop:4}}>{active.apartmentName}</div>
-            <div style={{fontSize:12,color:C.muted,marginTop:2}}>{active.employeeName} · entrada {toHM(active.startedAt)}{active.startLoc?" · 📍 ubicación guardada":" · sin ubicación"}</div>
+    <div style={{minHeight:"100vh",background:W.bg,color:W.ink,paddingBottom:110}}>
+      {/* Encabezado fijo */}
+      <div style={{position:"sticky",top:0,zIndex:20,background:W.card,borderBottom:`1px solid ${W.line}`,padding:"14px 16px 12px"}}>
+        <div style={{maxWidth:520,margin:"0 auto"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{active.apartmentName}</div>
+              <div style={{fontSize:12,color:W.muted,marginTop:2}}>Entrada {toHM(active.startedAt)}{active.startLoc?" · 📍 ubicación guardada":""}</div>
+            </div>
+            <div style={{background:W.amberSoft,color:W.amber,fontWeight:800,fontSize:16,padding:"8px 12px",borderRadius:12,whiteSpace:"nowrap"}}>⏱ {fmtMin((now-active.startedAt)/60000)}</div>
           </div>
-          <div style={{textAlign:"right"}}><div style={{fontSize:11,color:C.muted}}>Tiempo</div><div style={{fontSize:24,fontWeight:800,color:C.accent}}>{fmtMin((now-active.startedAt)/60000)}</div></div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:12}}>
+            {PASOS.map((p,i)=>(
+              <button key={p} onClick={()=>setStep(i)} style={{background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                <div style={{height:6,borderRadius:3,background:listo[i]?W.brand:i===step?W.amber:W.line}}/>
+                <div style={{fontSize:11,fontWeight:800,marginTop:5,color:i===step?W.ink:listo[i]?W.brand:W.muted}}>{listo[i]?"✓ ":""}{p}</div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div style={box}>
-        <PasoHeader n={1} title="Llegada" done={!!videos.entrada} sub={`Hora de entrada ${toHM(active.startedAt)} guardada. Graba un video recorriendo el apartamento como lo encontraste.`}/>
-        <VideoPaso cleaningId={active.id} k="entrada" label="Video de entrada" video={videos.entrada} showToast={showToast}/>
-      </div>
+      <div style={{maxWidth:520,margin:"0 auto",padding:"18px 16px"}}>
+        {/* Paso 1: video de ingreso */}
+        <div style={{display:step===0?"block":"none"}}>
+          <h2 style={title}>Video de ingreso</h2>
+          <p style={sub}>Antes de tocar nada, recorre todo el apartamento: habitaciones, baño, cocina y sala. Muestra daños, basura y objetos olvidados.</p>
+          <VideoPaso cleaningId={active.id} k="entrada" label="Video de ingreso" video={videos.entrada} showToast={showToast} autoStart onDone={()=>setStep(1)}/>
+        </div>
 
-      <div style={box}>
-        <PasoHeader n={2} title="Limpieza" done={doneItems===totalItems} sub={`${doneItems} de ${totalItems} tareas`}/>
-        {items.map((it,i)=>{const on=!!cl["i"+i];return(
-          <label key={i} style={{display:"flex",gap:12,alignItems:"center",padding:"11px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer",fontSize:15,color:on?C.muted:C.text,textDecoration:on?"line-through":"none"}}>
-            <input type="checkbox" checked={on} onChange={()=>toggleCheck("i"+i)} style={{width:22,height:22,accentColor:C.success,flexShrink:0}}/>{it}
-          </label>);})}
-        <label style={{display:"flex",gap:12,alignItems:"center",padding:"11px 0",cursor:"pointer",fontSize:15,fontWeight:700,color:cl.zona?C.muted:C.info,textDecoration:cl.zona?"line-through":"none"}}>
-          <input type="checkbox" checked={!!cl.zona} onChange={()=>toggleCheck("zona")} style={{width:22,height:22,accentColor:C.success,flexShrink:0}}/>Zona profunda de hoy: {active.zonaProfunda||ZONAS_PROFUNDAS[0]}
-        </label>
-      </div>
+        {/* Paso 2: checklist */}
+        <div style={{display:step===1?"block":"none"}}>
+          <h2 style={title}>Limpieza</h2>
+          <p style={sub}>{doneItems} de {totalItems} tareas. Toca cada tarea cuando la termines.</p>
+          <div style={{height:8,background:W.line,borderRadius:4,overflow:"hidden",marginBottom:16}}><div style={{width:`${doneItems/totalItems*100}%`,height:"100%",background:W.brand,transition:"width 0.3s"}}/></div>
+          <button onClick={()=>toggleCheck("zona")} style={{...wCard,width:"100%",display:"flex",alignItems:"center",gap:14,cursor:"pointer",fontFamily:"inherit",textAlign:"left",marginBottom:12,background:cl.zona?W.brandSoft:W.blueSoft,border:`1.5px solid ${cl.zona?W.brand:W.blue}`}}>
+            <span style={{width:34,height:34,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,background:cl.zona?W.brand:"#fff",color:"#fff",border:cl.zona?"none":`2px solid ${W.blue}`}}>{cl.zona?"✓":""}</span>
+            <span><span style={{display:"block",fontSize:11,fontWeight:800,color:W.blue,textTransform:"uppercase",letterSpacing:"0.06em"}}>Zona profunda de hoy</span><span style={{display:"block",fontSize:17,fontWeight:800,color:W.ink,marginTop:2}}>{active.zonaProfunda||ZONAS_PROFUNDAS[0]}</span></span>
+          </button>
+          {items.map((it,i)=>{const on=!!cl["i"+i];return(
+            <button key={i} onClick={()=>toggleCheck("i"+i)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"15px 16px",marginBottom:8,borderRadius:16,cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+              background:on?W.brandSoft:W.card,border:`1.5px solid ${on?W.brand:W.line}`}}>
+              <span style={{width:30,height:30,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,background:on?W.brand:"#fff",color:"#fff",border:on?"none":`2px solid ${W.line}`}}>{on?"✓":""}</span>
+              <span style={{fontSize:16,fontWeight:700,color:on?W.muted:W.ink,textDecoration:on?"line-through":"none"}}>{it}</span>
+            </button>);})}
+        </div>
 
-      <div style={box}>
-        <PasoHeader n={3} title="Fotos finales" done={fotosHechas===FOTOS_FINALES.length} sub={`${fotosHechas} de ${FOTOS_FINALES.length} fotos`}/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {FOTOS_FINALES.map(([k,label])=><FotoSlot key={k} cleaningId={active.id} k={k} label={k==="zona"?`Zona: ${active.zonaProfunda||""}`:label} has={!!fotos[k]} thumb={thumbs[k]} showToast={showToast}/>)}
+        {/* Paso 3: fotos */}
+        <div style={{display:step===2?"block":"none"}}>
+          <h2 style={title}>Fotos finales</h2>
+          <p style={sub}>{fotosHechas} de {FOTOS_FINALES.length}. Toma cada foto con el apartamento ya listo.</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {FOTOS_FINALES.map(([k,label])=><FotoSlot key={k} cleaningId={active.id} k={k} label={k==="zona"?`Zona: ${active.zonaProfunda||""}`:label} has={!!fotos[k]} thumb={thumbs[k]} showToast={showToast}/>)}
+          </div>
+        </div>
+
+        {/* Paso 4: salida */}
+        <div style={{display:step===3?"block":"none"}}>
+          <h2 style={title}>Salida</h2>
+          <p style={sub}>Graba el apartamento terminado, anota novedades y toca Terminé al salir.</p>
+          <VideoPaso cleaningId={active.id} k="salida" label="Video de salida" video={videos.salida} showToast={showToast}/>
+          <div style={{marginTop:18}}>
+            <div style={{fontSize:13,fontWeight:800,color:W.muted,marginBottom:6}}>Novedades: daños, faltantes, objetos olvidados</div>
+            <textarea value={activeNotes} onChange={e=>setActiveNotes(e.target.value)} rows={3} placeholder="Si no hay novedades, déjalo vacío" style={{...wInput,resize:"vertical"}}/>
+          </div>
+          <WBtn onClick={finishCleaning} disabled={saving} style={{marginTop:16,minHeight:62,fontSize:18}}>{saving?"Guardando…":"■ Terminé"}</WBtn>
         </div>
       </div>
 
-      <div style={box}>
-        <PasoHeader n={4} title="Salida" done={!!videos.salida} sub="Graba el video del apartamento terminado, escribe las novedades y toca Terminé."/>
-        <VideoPaso cleaningId={active.id} k="salida" label="Video de salida" video={videos.salida} showToast={showToast}/>
-        <div style={{height:14}}/>
-        <Lbl>Novedades (daños, faltantes, objetos olvidados)</Lbl>
-        <textarea value={activeNotes} onChange={e=>setActiveNotes(e.target.value)} rows={2} placeholder="Si no hay novedades, déjalo vacío" style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",marginBottom:12}}/>
-        <Btn variant="success" onClick={finishCleaning} disabled={saving} style={{width:"100%",padding:"16px",fontSize:17}}>{saving?"Guardando...":"■ Terminé"}</Btn>
+      {/* Barra inferior */}
+      <div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:20,background:W.card,borderTop:`1px solid ${W.line}`,padding:"12px 16px calc(12px + env(safe-area-inset-bottom))"}}>
+        <div style={{maxWidth:520,margin:"0 auto",display:"grid",gridTemplateColumns:step>0&&step<3?"1fr 2fr":"1fr",gap:10}}>
+          {step>0&&<WBtn kind="secondary" onClick={()=>setStep(step-1)}>← Atrás</WBtn>}
+          {step<3&&<WBtn onClick={()=>setStep(step+1)}>{step===0&&!videos.entrada?"Seguir sin video →":"Siguiente →"}</WBtn>}
+        </div>
       </div>
     </div>
   );
 }
 
-// Resumen del día: entradas, salidas, horas trabajadas y tiempos muertos entre apartamentos
-function DiaResumen({cleanings,employee,now}){
+// ── Resumen del día: horas trabajadas y tiempos muertos ──
+const resumenDia = (cleanings, employee, now) => {
   const hoy=todayStr();
-  const mine=cleanings.filter(c=>c.date===hoy&&c.employeeName===employee);
-  const timed=mine.filter(c=>c.startedAt).sort((a,b)=>a.startedAt-b.startedAt);
-  const manual=mine.filter(c=>!c.startedAt);
-  if(mine.length===0) return null;
-  let trabajado=0, muerto=0;
-  const rows=[];
+  const timed=cleanings.filter(c=>c.date===hoy&&c.employeeName===employee&&c.startedAt).sort((a,b)=>a.startedAt-b.startedAt);
+  let trabajado=0, muerto=0; const rows=[];
   timed.forEach((c,i)=>{
-    const fin=c.finishedAt||null;
-    const dur=((fin||now)-c.startedAt)/60000;
-    trabajado+=dur;
-    if(i>0){
-      const prev=timed[i-1];
-      if(prev.finishedAt){ const gap=(c.startedAt-prev.finishedAt)/60000; if(gap>0){ muerto+=gap; rows.push({gap,key:"g"+c.id}); } }
-    }
-    rows.push({c,dur,fin,key:c.id});
+    const dur=((c.finishedAt||now)-c.startedAt)/60000; trabajado+=dur;
+    if(i>0&&timed[i-1].finishedAt){ const g=(c.startedAt-timed[i-1].finishedAt)/60000; if(g>0){ muerto+=g; rows.push({gap:g,key:"g"+c.id}); } }
+    rows.push({c,dur,key:c.id});
   });
-  const first=timed[0]?.startedAt, lastFin=timed.length?(timed.at(-1).finishedAt||now):null;
-  const stat=(label,value,color)=>(<div style={{flex:1,minWidth:90,background:C.surface,borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:11,color:C.muted}}>{label}</div><div style={{fontSize:17,fontWeight:800,color:color||C.text,marginTop:2}}>{value}</div></div>);
-  return(
-    <div style={{marginBottom:20}}>
-      <div style={{color:C.muted,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:12}}>Mi día — {fmtDate(hoy)}</div>
-      {timed.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-        {stat("Apartamentos",String(timed.length))}
-        {stat("Horas trabajadas",fmtMin(trabajado),C.success)}
-        {stat("Tiempo muerto",fmtMin(muerto),muerto>0?C.danger:C.muted)}
-        {stat("Jornada",first?`${toHM(first)} – ${toHM(lastFin)}`:"—")}
-      </div>}
-      {rows.map(r=>r.gap!=null?(
-        <div key={r.key} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0 4px 14px",color:C.danger,fontSize:12,fontWeight:700}}>⏸ Tiempo muerto / traslado: {fmtMin(r.gap)}</div>
-      ):(
-        <div key={r.key} style={{background:C.card,border:`1px solid ${r.fin?C.border:C.accent}`,borderRadius:10,padding:"12px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-          <div>
-            <div style={{fontWeight:700,fontSize:14}}>{r.c.apartmentName}</div>
-            <div style={{fontSize:12,color:C.muted,marginTop:2}}>Entrada {toHM(r.c.startedAt)} · Salida {r.fin?toHM(r.fin):"en curso"} · 🎥 {Object.keys(r.c.videos||{}).length} · 📷 {Object.keys(r.c.fotos||{}).length}</div>
-          </div>
-          <div style={{fontWeight:800,color:r.fin?C.text:C.accent,whiteSpace:"nowrap"}}>{fmtMin(r.dur)}</div>
-        </div>
-      ))}
-      {manual.map(c=>(
-        <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",marginBottom:6}}>
-          <div style={{fontWeight:700,fontSize:14}}>{c.apartmentName}</div>
-          <div style={{fontSize:12,color:C.muted,marginTop:2}}>Registrada sin cronómetro · {c.time}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
+  return {timed,rows,trabajado,muerto};
+};
 
 function EmployeeView({appData,update,showToast,onLogout}){
-  // El nombre se recuerda en este celular para no elegirlo cada vez
   const [employee,setEmployeeRaw]=useState(()=>{ try{ return localStorage.getItem("lp_empleado")||""; }catch(e){ return ""; } });
   const setEmployee=(v)=>{ setEmployeeRaw(v); try{ localStorage.setItem("lp_empleado",v); }catch(e){} };
   const [now,setNow]=useState(Date.now());
   useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),15000); return ()=>clearInterval(t); },[]);
-  const [activeNotes,setActiveNotes]=useState("");
-  const [aptId,setAptId]=useState("");
-  const [notes,setNotes]=useState("");
-  const [date,setDate]=useState(todayStr());
-  const [showNewApt,setShowNewApt]=useState(false);
-  const [selectedBuilding,setSelectedBuilding]=useState("");
-  const [nAptNum,setNAptNum]=useState("");
-  const [nBuilding,setNBuilding]=useState("");
-  const [nClient,setNClient]=useState("");
-  const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
-  const buildings=[...new Set(appData.apartments.map(a=>a.building).filter(Boolean))].sort();
-  const clients=[...new Set(appData.apartments.map(a=>a.clientName).filter(Boolean))].sort();
-  const handleAddApt=()=>{
-    if(!nBuilding.trim()){showToast("El edificio es requerido","error");return;}
-    const num=nAptNum.trim(),bld=nBuilding.trim();
-    const displayName=num?`${num} ${bld}`:bld;
-    // Se guarda como documento propio — nunca pisa apartamentos que otro
-    // colaborador haya agregado justo antes.
-    APARTMENTS_COL.add({aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:0})
-      .then(()=>{
-        setNAptNum("");setNBuilding("");setNClient("");setShowNewApt(false);
-        showToast(`${displayName} agregado ✅`);
-      })
-      .catch(e=>{console.error(e);showToast("No se pudo agregar, intenta de nuevo","error");});
-  };
-  const sorted=[...appData.apartments].sort((a,b)=>a.building.localeCompare(b.building)||String(a.aptNumber).localeCompare(String(b.aptNumber),undefined,{numeric:true}));
-  const buildingGroups=[...new Set(sorted.map(a=>a.building))];
-  const apt=appData.apartments.find(a=>a.id===aptId);
-  const todayList=appData.cleanings.filter(c=>c.date===todayStr()).sort((a,b)=>b.createdAt-a.createdAt);
   const [saving,setSaving]=useState(false);
-  // Limpieza en curso de esta persona (empezó y no ha terminado)
+  const [activeNotes,setActiveNotes]=useState("");
+  const [abierta,setAbierta]=useState(null);       // tarjeta del día expandida
+  const [sheet,setSheet]=useState(false);          // apartamento no programado
+  const [selBuilding,setSelBuilding]=useState("");
+  const [selApt,setSelApt]=useState("");
+  const [manualDate,setManualDate]=useState(todayStr());
+  const [manualNotes,setManualNotes]=useState("");
+  const [nAptNum,setNAptNum]=useState(""), [nBuilding,setNBuilding]=useState(""), [nClient,setNClient]=useState("");
+  const hoy=todayStr();
+  const sorted=[...appData.apartments].sort((a,b)=>a.building.localeCompare(b.building)||String(a.aptNumber).localeCompare(String(b.aptNumber),undefined,{numeric:true}));
+  const buildings=[...new Set(sorted.map(a=>a.building).filter(Boolean))];
+  const clients=[...new Set(appData.apartments.map(a=>a.clientName).filter(Boolean))].sort();
   const active=employee?appData.cleanings.find(c=>c.enCurso&&c.employeeName===employee):null;
-  // Anti-duplicados: el mismo apartamento no se registra dos veces el mismo día.
-  const okToSave=(d)=>{
-    const aptName=apt?.displayName||"";
-    const same=appData.cleanings.filter(c=>c.date===d&&(c.apartmentId===aptId||normTxt(c.apartmentName)===normTxt(aptName)));
-    if(same.some(c=>normTxt(c.employeeName)===normTxt(employee))){
-      showToast(`${aptName} ya está registrado por ti el ${fmtDate(d)}. No se guardó de nuevo.`,"error");return false;
-    }
-    if(same.length>0 && !window.confirm(`${aptName} ya fue registrado el ${fmtDate(d)} por ${same.map(c=>c.employeeName||"otra persona").join(", ")}.\n\nSi lo hicieron juntas, NO lo registres otra vez: ya cuenta una vez.\n\n¿Registrarlo de todas formas?`)) return false;
+  const aptObj=(id,name)=>appData.apartments.find(a=>a.id===id)||appData.apartments.find(a=>normTxt(a.displayName)===normTxt(name));
+
+  // Anti-duplicados: el mismo apartamento no se registra dos veces el mismo día
+  const okToSave=(d,apt)=>{
+    const same=appData.cleanings.filter(c=>c.date===d&&(c.apartmentId===apt.id||normTxt(c.apartmentName)===normTxt(apt.displayName)));
+    if(same.some(c=>normTxt(c.employeeName)===normTxt(employee))){ showToast(`${apt.displayName} ya está registrado por ti el ${fmtDate(d)}.`,"error"); return false; }
+    if(same.length>0 && !window.confirm(`${apt.displayName} ya fue registrado el ${fmtDate(d)} por ${same.map(c=>c.employeeName||"otra persona").join(", ")}.\n\nSi lo hicieron juntas, NO lo registres otra vez: ya cuenta una vez.\n\n¿Registrarlo de todas formas?`)) return false;
     return true;
   };
-  const saveNew=(d,newC,okMsg)=>{
+  const saveNew=(d,apt,newC,okMsg)=>{
     setSaving(true);
-    const ref=CLEANINGS_COL.doc(`${d}_${aptId}_${employee}`.replace(/[\/\s]+/g,"-"));
-    return db.runTransaction(async t=>{
-      const s=await t.get(ref);
-      if(s.exists) throw new Error("DUPLICADO");
-      t.set(ref,newC);
-    })
-      .then(()=>{ showToast(okMsg); setAptId("");setNotes("");setSelectedBuilding(""); })
+    const ref=CLEANINGS_COL.doc(`${d}_${apt.id}_${employee}`.replace(/[\/\s]+/g,"-"));
+    return db.runTransaction(async t=>{ const s=await t.get(ref); if(s.exists) throw new Error("DUPLICADO"); t.set(ref,newC); })
+      .then(()=>showToast(okMsg))
       .catch(e=>{
         if(e&&e.message==="DUPLICADO"){ showToast("Esta limpieza ya estaba registrada, no se duplicó","error"); return; }
         console.error("Error guardando limpieza:",e); showToast("No se pudo guardar, revisa tu conexión e intenta de nuevo","error");
       })
       .finally(()=>setSaving(false));
   };
-  // ▶ Empezar: guarda hora y ubicación de llegada
-  const startCleaning=async()=>{
-    if(!employee||!aptId){showToast("Elige tu nombre y el apartamento","error");return;}
-    if(!CLEANINGS_COL){showToast("Sin conexión con la base de datos","error");return;}
-    if(active){showToast(`Primero termina ${active.apartmentName}`,"error");return;}
-    const d=todayStr();
-    if(!okToSave(d)) return;
+  // ▶ Empezar: hora y ubicación de llegada; luego la app pide el video de ingreso
+  const startCleaning=async(apt)=>{
+    if(!apt){ showToast("Elige el apartamento","error"); return; }
+    if(!CLEANINGS_COL){ showToast("Sin conexión con la base de datos","error"); return; }
+    if(active){ showToast(`Primero termina ${active.apartmentName}`,"error"); return; }
+    if(!okToSave(hoy,apt)) return;
     setSaving(true);
     const loc=await getPos();
     const ts=Date.now();
-    const prevTimed=appData.cleanings.filter(c=>c.apartmentId===aptId&&c.startedAt).length;
-    const tipo=apt?.tipo||"";
-    const newC={date:d,time:new Date(ts).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes:"",paid:false,amount:apt?.price||0,createdAt:ts,
-      enCurso:true,startedAt:ts,startLoc:loc,tipo,zonaProfunda:ZONAS_PROFUNDAS.at(prevTimed%ZONAS_PROFUNDAS.length),checklist:{}};
-    setActiveNotes("");
-    saveNew(d,newC,loc?"▶ Limpieza iniciada ✅":"▶ Limpieza iniciada (sin ubicación)");
+    const prevTimed=appData.cleanings.filter(c=>c.apartmentId===apt.id&&c.startedAt).length;
+    const newC={date:hoy,time:new Date(ts).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:apt.id,apartmentName:apt.displayName||"",clientName:apt.clientName||"",notes:"",paid:false,amount:apt.price||0,createdAt:ts,
+      enCurso:true,startedAt:ts,startLoc:loc,tipo:apt.tipo||"",zonaProfunda:ZONAS_PROFUNDAS.at(prevTimed%ZONAS_PROFUNDAS.length),checklist:{}};
+    setActiveNotes(""); setAbierta(null); setSheet(false);
+    saveNew(hoy,apt,newC,loc?"▶ Empezaste. Graba el video de ingreso":"▶ Empezaste (sin ubicación)");
   };
   const toggleCheck=(key)=>{
     if(!active) return;
     const cl={...(active.checklist||{}),[key]:!(active.checklist||{})[key]};
-    CLEANINGS_COL.doc(active.id).update({checklist:cl}).catch(e=>{console.error(e);showToast("No se pudo guardar el check","error");});
+    CLEANINGS_COL.doc(active.id).update({checklist:cl}).catch(e=>{console.error(e);showToast("No se pudo guardar","error");});
   };
-  // ■ Terminar: guarda hora y ubicación de salida y la duración
   const finishCleaning=async()=>{
     if(!active) return;
     const items=checklistFor(active.tipo);
     const total=items.length+1;
     const done=items.filter((_,i)=>(active.checklist||{})["i"+i]).length+((active.checklist||{}).zona?1:0);
     const faltanFotos=FOTOS_FINALES.filter(([k])=>!(active.fotos||{})[k]).map(([,l])=>l);
-    const faltanVideos=[["entrada","video de entrada"],["salida","video de salida"]].filter(([k])=>!(active.videos||{})[k]).map(([,l])=>l);
+    const faltanVideos=[["entrada","video de ingreso"],["salida","video de salida"]].filter(([k])=>!(active.videos||{})[k]).map(([,l])=>l);
     const faltas=[];
-    if(done<total) faltas.push(`${total-done} tareas del checklist`);
     if(faltanVideos.length) faltas.push(faltanVideos.join(" y "));
+    if(done<total) faltas.push(`${total-done} tareas del checklist`);
     if(faltanFotos.length) faltas.push(`fotos: ${faltanFotos.join(", ")}`);
     if(faltas.length && !window.confirm(`Te falta:\n• ${faltas.join("\n• ")}\n\n¿Terminar de todas formas?`)) return;
     setSaving(true);
     const loc=await getPos();
     const fin=Date.now();
     CLEANINGS_COL.doc(active.id).update({enCurso:false,finishedAt:fin,endLoc:loc,durationMin:Math.round((fin-active.startedAt)/60000),notes:activeNotes.trim()||active.notes||""})
-      .then(()=>{ showToast(`■ Terminado: ${fmtMin((fin-active.startedAt)/60000)} ✅`); setActiveNotes(""); })
+      .then(()=>{ showToast(`■ Terminado en ${fmtMin((fin-active.startedAt)/60000)} ✅`); setActiveNotes(""); })
       .catch(e=>{console.error(e);showToast("No se pudo terminar, revisa tu conexión","error");})
       .finally(()=>setSaving(false));
   };
   // Registro sin cronómetro (como antes), para limpiezas ya hechas
-  const handleSubmit=()=>{
-    if(!employee||!aptId||!date){showToast("Completa todos los campos","error");return;}
-    if(!CLEANINGS_COL){showToast("Sin conexión con la base de datos","error");return;}
-    if(!okToSave(date)) return;
-    const newC={date,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes,paid:false,amount:apt?.price||0,createdAt:Date.now()};
-    // ID fijo (fecha + apartamento + encargado): un doble toque o dos celulares no duplican.
-    saveNew(date,newC,"¡Limpieza registrada! ✅");
+  const registrarManual=()=>{
+    const apt=aptObj(selApt);
+    if(!apt||!manualDate){ showToast("Elige apartamento y fecha","error"); return; }
+    if(!okToSave(manualDate,apt)) return;
+    const newC={date:manualDate,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:apt.id,apartmentName:apt.displayName,clientName:apt.clientName||"",notes:manualNotes,paid:false,amount:apt.price||0,createdAt:Date.now()};
+    saveNew(manualDate,apt,newC,"¡Limpieza registrada! ✅").then(()=>{ setManualNotes(""); setSheet(false); });
   };
-  return(
-    <div style={{minHeight:"100vh",maxWidth:480,margin:"0 auto",padding:"20px 16px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-        <div><h2 style={{margin:0,fontSize:22,fontWeight:800}}>🧹 Nueva limpieza</h2><p style={{margin:"2px 0 0",color:C.muted,fontSize:13}}>{fmtDate(todayStr())}</p></div>
-        <Btn variant="ghost" size="sm" onClick={onLogout}>Salir</Btn>
-      </div>
-      {active&&<ActiveCleaning active={active} now={now} saving={saving} activeNotes={activeNotes} setActiveNotes={setActiveNotes} toggleCheck={toggleCheck} finishCleaning={finishCleaning} showToast={showToast}/>}
-      {!active&&<Card style={{marginBottom:20}}>
-        <div style={{marginBottom:14}}><Lbl>Tu nombre *</Lbl>
-          <Sel value={employee} onChange={setEmployee}><option value="">-- Selecciona --</option>{appData.employees.map(e=><option key={e} value={e}>{e}</option>)}</Sel>
-        </div>
-        <div style={{marginBottom:14}}>
-          <Lbl>Edificio *</Lbl>
-          <Sel value={selectedBuilding} onChange={v=>{setSelectedBuilding(v);setAptId("");}}>
-            <option value="">-- Selecciona edificio --</option>
-            {buildingGroups.map(b=><option key={b} value={b}>📍 {b} ({sorted.filter(a=>a.building===b).length} aptos)</option>)}
-          </Sel>
-        </div>
-        {selectedBuilding&&(
-          <div style={{marginBottom:14}}>
-            <Lbl>Apartamento *</Lbl>
-            <Sel value={aptId} onChange={setAptId}>
-              <option value="">-- Selecciona apartamento --</option>
-              {sorted.filter(a=>a.building===selectedBuilding).map(a=><option key={a.id} value={a.id}>{a.displayName}{a.clientName?` — ${a.clientName}`:""}</option>)}
-            </Sel>
-          </div>
-        )}
-        {apt&&(
-          <div style={{marginBottom:14,padding:"12px 14px",background:C.surface,borderRadius:8}}>
-            <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.muted,fontSize:13}}>Cliente</span><span style={{fontWeight:700,fontSize:13,color:C.info}}>{apt.clientName||"—"}</span></div>
-          </div>
-        )}
-        <div style={{marginBottom:14}}><Lbl>Fecha *</Lbl><Inp type="date" value={date} onChange={setDate}/></div>
-        <div style={{marginBottom:20}}><Lbl>Observaciones (opcional)</Lbl>
-          <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Estado del apartamento, novedades..." rows={3} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-        </div>
-        <Btn onClick={startCleaning} disabled={saving} style={{width:"100%",padding:"14px",fontSize:16}}>{saving?"Guardando...":"▶ Empezar limpieza"}</Btn>
-        <div style={{fontSize:11,color:C.muted,textAlign:"center",margin:"8px 0 14px"}}>Toca Empezar al llegar al apartamento y Terminé al salir. Se guarda la hora y la ubicación.</div>
-        <details>
-          <summary style={{cursor:"pointer",color:C.muted,fontSize:13,fontWeight:600}}>Registrar una limpieza ya hecha (sin cronómetro)</summary>
-          <div style={{marginTop:12}}>
-            <div style={{marginBottom:14}}><Lbl>Fecha *</Lbl><Inp type="date" value={date} onChange={setDate}/></div>
-            <div style={{marginBottom:14}}><Lbl>Observaciones (opcional)</Lbl>
-              <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Estado del apartamento, novedades..." rows={2} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-            </div>
-            <Btn variant="ghost" onClick={handleSubmit} disabled={saving} style={{width:"100%"}}>{saving?"Guardando...":"✓ Registrar sin cronómetro"}</Btn>
-          </div>
-        </details>
-      </Card>}
-      {!active&&<div style={{marginBottom:20}}>
-        <button onClick={()=>setShowNewApt(!showNewApt)} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.border}`,borderRadius:10,color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
-          {showNewApt?"✕ Cancelar":"➕ Agregar apartamento nuevo"}
-        </button>
-        {showNewApt&&(
-          <Card style={{marginTop:10}}>
-            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:700}}>Nuevo apartamento</h3>
-            <div style={{marginBottom:12}}><Lbl>Número de apto</Lbl><Inp value={nAptNum} onChange={setNAptNum} placeholder="Ej: 303"/></div>
-            <div style={{marginBottom:12}}><Lbl>Edificio *</Lbl><input list="emp-blist" value={nBuilding} onChange={e=>setNBuilding(e.target.value)} placeholder="Ej: Monserrate" style={inpStyle}/><datalist id="emp-blist">{buildings.map(b=><option key={b} value={b}/>)}</datalist></div>
-            <div style={{marginBottom:16}}><Lbl>Cliente</Lbl><input list="emp-clist" value={nClient} onChange={e=>setNClient(e.target.value)} placeholder="Ej: Veronica" style={inpStyle}/><datalist id="emp-clist">{clients.map(cl=><option key={cl} value={cl}/>)}</datalist></div>
-            <div style={{fontSize:11,color:C.muted,marginBottom:12}}>* El precio lo define el admin después.</div>
-            <Btn onClick={handleAddApt} style={{width:"100%"}}>+ Agregar</Btn>
-          </Card>
-        )}
-      </div>}
-      {employee&&<DiaResumen cleanings={appData.cleanings} employee={employee} now={now}/>}
+  const handleAddApt=()=>{
+    if(!nBuilding.trim()){ showToast("El edificio es requerido","error"); return; }
+    const num=nAptNum.trim(), bld=nBuilding.trim();
+    const displayName=num?`${num} ${bld}`:bld;
+    APARTMENTS_COL.add({aptNumber:num,building:bld,displayName,clientName:nClient.trim()||"",price:0})
+      .then(()=>{ setNAptNum("");setNBuilding("");setNClient(""); showToast(`${displayName} agregado ✅`); })
+      .catch(e=>{ console.error(e); showToast("No se pudo agregar, intenta de nuevo","error"); });
+  };
 
-      {/* Historial de limpiezas por fecha */}
-      <CleaningHistoryEmployee cleanings={appData.cleanings}/>
-    </div>
+  const page={minHeight:"100vh",background:W.bg,color:W.ink};
+  const wrap={maxWidth:520,margin:"0 auto",padding:"18px 16px 40px"};
+
+  // 1) ¿Quién eres?
+  if(!employee) return(
+    <div style={page}><div style={wrap}>
+      <div style={{fontSize:13,fontWeight:800,color:W.brand,textTransform:"uppercase",letterSpacing:"0.08em"}}>Limpieza Pro</div>
+      <h1 style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",margin:"6px 0 20px"}}>¿Quién eres?</h1>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        {appData.employees.map(e=>(
+          <button key={e} onClick={()=>setEmployee(e)} style={{...wCard,cursor:"pointer",fontFamily:"inherit",textAlign:"center",padding:"22px 10px"}}>
+            <div style={{width:52,height:52,borderRadius:"50%",background:W.brandSoft,color:W.brand,fontWeight:900,fontSize:22,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>{e.slice(0,1)}</div>
+            <div style={{fontWeight:800,fontSize:16,color:W.ink}}>{nombreBonito(e)}</div>
+          </button>
+        ))}
+      </div>
+      <WBtn kind="ghost" onClick={onLogout} style={{marginTop:20}}>Salir</WBtn>
+    </div></div>
+  );
+
+  // 2) Limpieza en curso → asistente por pasos
+  if(active) return <CleaningWizard active={active} now={now} saving={saving} activeNotes={activeNotes} setActiveNotes={setActiveNotes} toggleCheck={toggleCheck} finishCleaning={finishCleaning} showToast={showToast}/>;
+
+  // 3) Lista del día
+  const agendaHoy=(appData.agenda||[]).filter(a=>a.date===hoy&&(!a.asignadaA||a.asignadaA===employee));
+  const estadoDe=(item)=>{
+    const cs=appData.cleanings.filter(c=>c.date===hoy&&(c.apartmentId===item.apartmentId||normTxt(c.apartmentName)===normTxt(item.apartmentName)));
+    const run=cs.find(c=>c.enCurso); if(run) return {k:"curso",c:run};
+    if(cs.length) return {k:"hecho",c:cs[0]};
+    return {k:"pendiente"};
+  };
+  const lista=agendaHoy.map(it=>({it,st:estadoDe(it)}));
+  const orden={curso:0,pendiente:1,hecho:2};
+  lista.sort((a,b)=>orden[a.st.k]-orden[b.st.k]||(a.it.checkIn||"99").localeCompare(b.it.checkIn||"99")||(a.it.apartmentName||"").localeCompare(b.it.apartmentName||""));
+  const pendientes=lista.filter(x=>x.st.k==="pendiente").length, hechos=lista.filter(x=>x.st.k==="hecho").length;
+  const {rows,trabajado,muerto,timed}=resumenDia(appData.cleanings,employee,now);
+  const stat=(label,value,color)=>(<div style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:16,padding:"12px 12px"}}><div style={{fontSize:11,fontWeight:700,color:W.muted}}>{label}</div><div style={{fontSize:20,fontWeight:800,color:color||W.ink,marginTop:2,letterSpacing:"-0.02em"}}>{value}</div></div>);
+  const badge=(txt,bg,fg)=><span style={{display:"inline-block",whiteSpace:"nowrap",background:bg,color:fg,fontSize:12,fontWeight:800,padding:"5px 10px",borderRadius:999}}>{txt}</span>;
+
+  return(
+    <div style={page}><div style={wrap}>
+      {/* Encabezado */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:18}}>
+        <div>
+          <div style={{fontSize:14,color:W.muted,fontWeight:600}}>{fechaLarga()}</div>
+          <h1 style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",margin:"2px 0 0"}}>Hola, {nombreBonito(employee)}</h1>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setEmployee("")} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Cambiar</button>
+          <button onClick={onLogout} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Salir</button>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:22}}>
+        {stat("Pendientes",String(pendientes),pendientes?W.amber:W.muted)}
+        {stat("Hechos",String(hechos),W.brand)}
+        {stat("Trabajado",timed.length?fmtMin(trabajado):"—")}
+        {stat("Muerto",timed.length>1?fmtMin(muerto):"—",muerto?W.red:W.muted)}
+      </div>
+
+      {/* Apartamentos del día */}
+      <div style={{fontSize:13,fontWeight:800,color:W.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>Para hoy</div>
+      {lista.length===0&&(
+        <div style={{...wCard,textAlign:"center",padding:"28px 18px",marginBottom:12}}>
+          <div style={{fontSize:34}}>🗓️</div>
+          <div style={{fontWeight:800,fontSize:17,marginTop:6}}>No tienes apartamentos programados</div>
+          <div style={{fontSize:14,color:W.muted,marginTop:4}}>Pídele la lista a coordinación o empieza uno que no esté en la lista.</div>
+        </div>
+      )}
+      {lista.map(({it,st})=>{
+        const open=abierta===it.id&&st.k==="pendiente";
+        const apt=aptObj(it.apartmentId,it.apartmentName)||{id:it.apartmentId,displayName:it.apartmentName,clientName:it.clientName,price:0};
+        const color=st.k==="hecho"?W.brand:st.k==="curso"?W.amber:W.ink;
+        return(
+          <div key={it.id} onClick={()=>st.k==="pendiente"&&setAbierta(open?null:it.id)} style={{...wCard,marginBottom:10,padding:0,overflow:"hidden",cursor:st.k==="pendiente"?"pointer":"default",opacity:st.k==="hecho"?0.75:1,borderColor:open?W.brand:W.line,borderWidth:open?2:1}}>
+            <div style={{display:"flex",alignItems:"stretch"}}>
+              <div style={{width:6,background:st.k==="hecho"?W.brand:st.k==="curso"?W.amber:W.line}}/>
+              <div style={{flex:1,padding:"16px 16px 14px"}}>
+                <div style={{fontSize:21,fontWeight:800,letterSpacing:"-0.02em",color}}>{st.k==="hecho"?"✓ ":""}{it.apartmentName}</div>
+                <div style={{fontSize:13,color:W.muted,marginTop:2}}>{it.clientName||"—"}{apt.tipo?` · ${APT_TYPES[apt.tipo]}`:""}</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
+                  {st.k==="pendiente"&&it.checkIn&&badge(`⏰ Listo antes de las ${hm12(it.checkIn)}`,W.amberSoft,W.amber)}
+                  {st.k==="pendiente"&&it.asignadaA&&badge("Asignado a ti",W.blueSoft,W.blue)}
+                  {st.k==="curso"&&badge(`⏱ En curso · ${nombreBonito(st.c.employeeName)}`,W.amberSoft,W.amber)}
+                  {st.k==="hecho"&&badge(`✓ Hecho${durMin(st.c)!=null?` en ${fmtMin(durMin(st.c))}`:""} · ${nombreBonito(st.c.employeeName)}`,W.brandSoft,W.brand)}
+                </div>
+                {it.nota&&<div style={{fontSize:13,color:W.ink,background:W.bg,borderRadius:10,padding:"8px 10px",marginTop:10}}>📝 {it.nota}</div>}
+                {open&&(
+                  <div style={{marginTop:14}} onClick={e=>e.stopPropagation()}>
+                    <WBtn onClick={()=>startCleaning(apt)} disabled={saving} style={{minHeight:60,fontSize:17}}>{saving?"Abriendo…":"🎥 Empezar y grabar ingreso"}</WBtn>
+                    <div style={{fontSize:12,color:W.muted,textAlign:"center",marginTop:8}}>Se guarda la hora y tu ubicación de llegada</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      <WBtn kind="secondary" onClick={()=>setSheet(!sheet)} style={{marginTop:6}}>{sheet?"✕ Cerrar":"＋ Un apartamento que no está en la lista"}</WBtn>
+      {sheet&&(
+        <div style={{...wCard,marginTop:10}}>
+          <div style={{fontSize:13,fontWeight:800,color:W.muted,marginBottom:6}}>Edificio</div>
+          <select value={selBuilding} onChange={e=>{setSelBuilding(e.target.value);setSelApt("");}} style={{...wInput,marginBottom:12}}>
+            <option value="">Elige el edificio</option>{buildings.map(b=><option key={b} value={b}>{b}</option>)}
+          </select>
+          {selBuilding&&<>
+            <div style={{fontSize:13,fontWeight:800,color:W.muted,marginBottom:6}}>Apartamento</div>
+            <select value={selApt} onChange={e=>setSelApt(e.target.value)} style={{...wInput,marginBottom:14}}>
+              <option value="">Elige el apartamento</option>{sorted.filter(a=>a.building===selBuilding).map(a=><option key={a.id} value={a.id}>{a.displayName}{a.clientName?` — ${a.clientName}`:""}</option>)}
+            </select>
+          </>}
+          <WBtn onClick={()=>startCleaning(aptObj(selApt))} disabled={!selApt||saving}>🎥 Empezar y grabar ingreso</WBtn>
+          <details style={{marginTop:16}}>
+            <summary style={{cursor:"pointer",color:W.muted,fontSize:14,fontWeight:700}}>Registrar una limpieza ya hecha (sin cronómetro)</summary>
+            <div style={{marginTop:12}}>
+              <div style={{fontSize:13,fontWeight:800,color:W.muted,marginBottom:6}}>Fecha</div>
+              <input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)} style={{...wInput,marginBottom:10}}/>
+              <textarea value={manualNotes} onChange={e=>setManualNotes(e.target.value)} rows={2} placeholder="Observaciones (opcional)" style={{...wInput,marginBottom:10,resize:"vertical"}}/>
+              <WBtn kind="secondary" onClick={registrarManual} disabled={!selApt||saving}>✓ Registrar sin cronómetro</WBtn>
+            </div>
+          </details>
+          <details style={{marginTop:12}}>
+            <summary style={{cursor:"pointer",color:W.muted,fontSize:14,fontWeight:700}}>El apartamento no aparece: agregarlo</summary>
+            <div style={{marginTop:12,display:"grid",gap:10}}>
+              <input value={nAptNum} onChange={e=>setNAptNum(e.target.value)} placeholder="Número (ej: 303)" style={wInput}/>
+              <input list="w-blist" value={nBuilding} onChange={e=>setNBuilding(e.target.value)} placeholder="Edificio (ej: Monserrate)" style={wInput}/><datalist id="w-blist">{buildings.map(b=><option key={b} value={b}/>)}</datalist>
+              <input list="w-clist" value={nClient} onChange={e=>setNClient(e.target.value)} placeholder="Cliente" style={wInput}/><datalist id="w-clist">{clients.map(c=><option key={c} value={c}/>)}</datalist>
+              <WBtn kind="secondary" onClick={handleAddApt}>＋ Agregar apartamento</WBtn>
+            </div>
+          </details>
+        </div>
+      )}
+
+      {/* Mi día */}
+      {rows.length>0&&<>
+        <div style={{fontSize:13,fontWeight:800,color:W.muted,textTransform:"uppercase",letterSpacing:"0.06em",margin:"26px 0 10px"}}>Mi día</div>
+        <div style={{...wCard,padding:"6px 16px"}}>
+          {rows.map(r=>r.gap!=null?(
+            <div key={r.key} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0 8px 6px",color:W.red,fontSize:13,fontWeight:800}}>
+              <span style={{width:2,height:22,background:W.redSoft,borderRadius:1,marginLeft:4}}/>⏸ Tiempo muerto {fmtMin(r.gap)}
+            </div>
+          ):(
+            <div key={r.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"12px 0",borderBottom:`1px solid ${W.line}`}}>
+              <div>
+                <div style={{fontWeight:800,fontSize:15}}>{r.c.apartmentName}</div>
+                <div style={{fontSize:12,color:W.muted,marginTop:2}}>{toHM(r.c.startedAt)} → {r.c.finishedAt?toHM(r.c.finishedAt):"en curso"} · 🎥 {Object.keys(r.c.videos||{}).length} · 📷 {Object.keys(r.c.fotos||{}).length}</div>
+              </div>
+              <div style={{fontWeight:800,fontSize:15,color:r.c.finishedAt?W.ink:W.amber}}>{fmtMin(r.dur)}</div>
+            </div>
+          ))}
+        </div>
+      </>}
+
+      <details style={{marginTop:24}}>
+        <summary style={{cursor:"pointer",color:W.muted,fontSize:14,fontWeight:700}}>Ver historial de limpiezas</summary>
+        <div style={{background:C.bg,borderRadius:16,padding:12,marginTop:10,color:C.text}}><CleaningHistoryEmployee cleanings={appData.cleanings}/></div>
+      </details>
+    </div></div>
   );
 }
 
@@ -859,7 +963,7 @@ function CleaningHistoryEmployee({cleanings}){
 }
 
 function AdminView({appData,update,showToast,onLogout,tab,setTab}){
-  const tabs=[["dashboard","📊 Resumen"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
+  const tabs=[["dashboard","📊 Resumen"],["agenda","📅 Agenda"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
   return(
     <div style={{minHeight:"100vh"}}>
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`}}>
@@ -882,6 +986,7 @@ function AdminView({appData,update,showToast,onLogout,tab,setTab}){
       <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 20px"}}>
         {tab==="dashboard"&&<DashboardTab appData={appData}/>}
         {tab==="cleanings"&&<CleaningsTab appData={appData} update={update} showToast={showToast}/>}
+        {tab==="agenda"   &&<AgendaTab    appData={appData} showToast={showToast}/>}
         {tab==="tiempos"  &&<TiemposTab   appData={appData}/>}
         {tab==="clients"  &&<ClientsTab   appData={appData} update={update} showToast={showToast}/>}
         {tab==="config"   &&<ConfigTab    appData={appData} update={update} showToast={showToast}/>}
@@ -1328,6 +1433,86 @@ function ClientsTab({appData,update,showToast}){
   );
 }
 
+// 📅 Agenda: qué apartamentos se limpian cada día, a quién se asignan y para qué hora
+function AgendaTab({appData,showToast}){
+  const [fecha,setFecha]=useState(todayStr());
+  const [sel,setSel]=useState({});
+  const [q,setQ]=useState("");
+  const items=(appData.agenda||[]).filter(a=>a.date===fecha).sort((a,b)=>(a.checkIn||"99").localeCompare(b.checkIn||"99")||(a.apartmentName||"").localeCompare(b.apartmentName||""));
+  const enAgenda=new Set(items.map(i=>i.apartmentId));
+  const sorted=[...appData.apartments].sort((a,b)=>a.building.localeCompare(b.building)||String(a.aptNumber).localeCompare(String(b.aptNumber),undefined,{numeric:true}));
+  const visibles=sorted.filter(a=>!enAgenda.has(a.id)&&(!q||normTxt(a.displayName+" "+(a.clientName||"")).includes(normTxt(q))));
+  const grupos=[...new Set(visibles.map(a=>a.building))];
+  const nSel=Object.values(sel).filter(Boolean).length;
+  const agregar=()=>{
+    const ids=Object.keys(sel).filter(k=>sel[k]); if(!ids.length) return;
+    const batch=db.batch();
+    ids.forEach(id=>{const a=appData.apartments.find(x=>x.id===id); if(!a) return;
+      batch.set(AGENDA_COL.doc(`${fecha}_${id}`),{date:fecha,apartmentId:id,apartmentName:a.displayName,building:a.building||"",clientName:a.clientName||"",asignadaA:"",checkIn:"15:00",nota:"",createdAt:Date.now()},{merge:true});});
+    batch.commit().then(()=>{setSel({});showToast(`${ids.length} apartamento${ids.length>1?"s":""} agregado${ids.length>1?"s":""} a la agenda ✅`);}).catch(e=>{console.error(e);showToast("No se pudo agregar","error");});
+  };
+  const upd=(id,field,val)=>AGENDA_COL.doc(id).update({[field]:val}).catch(e=>{console.error(e);showToast("No se pudo guardar","error");});
+  const quitar=(it)=>{ if(!window.confirm(`¿Quitar ${it.apartmentName} de la agenda del ${fmtDate(fecha)}?`)) return; AGENDA_COL.doc(it.id).delete().catch(e=>{console.error(e);showToast("No se pudo quitar","error");}); };
+  const estado=(it)=>{
+    const cs=appData.cleanings.filter(c=>c.date===fecha&&(c.apartmentId===it.apartmentId||normTxt(c.apartmentName)===normTxt(it.apartmentName)));
+    const run=cs.find(c=>c.enCurso); if(run) return <span style={{color:C.accent,fontWeight:700}}>⏱ En curso · {run.employeeName} desde {toHM(run.startedAt)}</span>;
+    if(cs.length){const c=cs[0];const d=durMin(c);return <span style={{color:C.success,fontWeight:700}}>✓ Hecho · {c.employeeName}{d!=null?` · ${fmtMin(d)}`:""}</span>;}
+    return <span style={{color:C.muted}}>Pendiente</span>;
+  };
+  const sm={padding:"6px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:12,fontFamily:"inherit",outline:"none"};
+  const manana=(()=>{const d=new Date();d.setDate(d.getDate()+1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;})();
+  const hechos=items.filter(it=>appData.cleanings.some(c=>c.date===fecha&&!c.enCurso&&(c.apartmentId===it.apartmentId))).length;
+  return(
+    <div>
+      <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:800}}>Agenda de limpiezas</h2>
+      <div style={{color:C.muted,fontSize:13,marginBottom:18}}>Lo que pongas aquí es la lista que ve cada aseadora en su celular. Sin asignar = la ven todas.</div>
+      <Card style={{marginBottom:16,display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
+        <div style={{minWidth:180}}><Lbl>Fecha</Lbl><Inp type="date" value={fecha} onChange={setFecha}/></div>
+        <Btn variant={fecha===todayStr()?"primary":"ghost"} onClick={()=>setFecha(todayStr())}>Hoy</Btn>
+        <Btn variant={fecha===manana?"primary":"ghost"} onClick={()=>setFecha(manana)}>Mañana</Btn>
+        <div style={{marginLeft:"auto",color:C.muted,fontSize:13}}>{items.length} apartamentos · {hechos} hechos</div>
+      </Card>
+      <Card style={{padding:0,overflow:"hidden",marginBottom:20}}><div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface}}>{["Apartamento","Cliente","Check-in","Asignada a","Nota para la aseadora","Estado",""].map(h=><th key={h} style={{textAlign:"left",padding:"10px 12px",color:C.muted,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+          <tbody>
+            {items.length===0?<tr><td colSpan={7} style={{textAlign:"center",padding:30,color:C.muted}}>No hay apartamentos en la agenda de este día. Agrégalos abajo.</td></tr>
+            :items.map(it=>(
+              <tr key={it.id} style={{borderTop:`1px solid ${C.border}`}}>
+                <td style={{padding:"10px 12px",fontWeight:700,whiteSpace:"nowrap"}}>{it.apartmentName}</td>
+                <td style={{padding:"10px 12px",color:C.info}}>{it.clientName||"—"}</td>
+                <td style={{padding:"10px 12px"}}><input type="time" defaultValue={it.checkIn||""} onBlur={e=>e.target.value!==(it.checkIn||"")&&upd(it.id,"checkIn",e.target.value)} style={sm}/></td>
+                <td style={{padding:"10px 12px"}}><select value={it.asignadaA||""} onChange={e=>upd(it.id,"asignadaA",e.target.value)} style={sm}><option value="">Sin asignar</option>{appData.employees.map(e=><option key={e} value={e}>{e}</option>)}</select></td>
+                <td style={{padding:"10px 12px"}}><input defaultValue={it.nota||""} placeholder="Ej: llave en portería" onBlur={e=>e.target.value!==(it.nota||"")&&upd(it.id,"nota",e.target.value)} style={{...sm,width:200}}/></td>
+                <td style={{padding:"10px 12px",whiteSpace:"nowrap"}}>{estado(it)}</td>
+                <td style={{padding:"10px 12px",textAlign:"right"}}><Btn variant="ghost" size="sm" onClick={()=>quitar(it)}>Quitar</Btn></td>
+              </tr>))}
+          </tbody>
+        </table>
+      </div></Card>
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:14}}>
+          <h3 style={{margin:0,fontSize:15,fontWeight:700}}>Agregar apartamentos al {fmtDate(fecha)}</h3>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <Inp value={q} onChange={setQ} placeholder="🔍 Buscar..." style={{width:200}}/>
+            <Btn onClick={agregar} disabled={!nSel}>＋ Agregar {nSel||""}</Btn>
+          </div>
+        </div>
+        {grupos.map(b=>(
+          <div key={b} style={{marginBottom:14}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>📍 {b}</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {visibles.filter(a=>a.building===b).map(a=>{const on=!!sel[a.id];return(
+                <button key={a.id} onClick={()=>setSel(p=>({...p,[a.id]:!p[a.id]}))} style={{padding:"8px 12px",borderRadius:20,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700,border:`1px solid ${on?C.accent:C.border}`,background:on?C.accent:"transparent",color:on?"#0b0f18":C.text}}>{on?"✓ ":""}{a.aptNumber||a.displayName}{a.clientName?<span style={{fontWeight:400,opacity:0.7}}> · {a.clientName}</span>:null}</button>);})}
+            </div>
+          </div>
+        ))}
+        {grupos.length===0&&<div style={{color:C.muted,fontSize:13}}>Todos los apartamentos ya están en la agenda de este día.</div>}
+      </Card>
+    </div>
+  );
+}
+
 // ⏱ Tiempos y ganancia: por apartamento, por aseadora y por jornada (con tiempos muertos)
 function TiemposTab({appData}){
   const k=getCosts(appData.settings);
@@ -1646,6 +1831,7 @@ function App(){
   // individuales — nunca se sobrescriben enteras, así que nada se pierde.
   const [cleaningsLog,setCleaningsLog]=useState(null);
   const [apartmentsLog,setApartmentsLog]=useState(null);
+  const [agendaLog,setAgendaLog]=useState([]);
   const [migrated,setMigrated]=useState(false);
   const [migratedApts,setMigratedApts]=useState(false);
   const [view,setView]=useState("login");
@@ -1726,6 +1912,15 @@ function App(){
     return ()=>unsub();
   },[]);
 
+  // Escucha en vivo la agenda de los últimos 7 días en adelante
+  useEffect(()=>{
+    if(!FIREBASE_OK || !AGENDA_COL){ setAgendaLog([]); return; }
+    const unsub = AGENDA_COL.where("date",">=",daysAgoStr(7)).onSnapshot(snap=>{
+      setAgendaLog(snap.docs.map(d=>({id:d.id,...d.data()})));
+    }, err=>{ console.error("Error cargando agenda:",err); setAgendaLog([]); });
+    return ()=>unsub();
+  },[]);
+
   // Escucha en vivo la lista de apartamentos — cada uno es su propio documento
   useEffect(()=>{
     if(!FIREBASE_OK || !APARTMENTS_COL){ setApartmentsLog([]); return; }
@@ -1737,7 +1932,7 @@ function App(){
 
   // Los registros marcados como duplicado no cuentan en ningún total ni listado;
   // quedan aparte (appData.duplicates) para poder revisarlos o restaurarlos.
-  const appData = core ? {...core, cleanings: (cleaningsLog||[]).filter(c=>!c.duplicado), duplicates: (cleaningsLog||[]).filter(c=>c.duplicado), apartments: apartmentsLog||[]} : null;
+  const appData = core ? {...core, cleanings: (cleaningsLog||[]).filter(c=>!c.duplicado), duplicates: (cleaningsLog||[]).filter(c=>c.duplicado), apartments: apartmentsLog||[], agenda: agendaLog||[]} : null;
   const loading = !core || cleaningsLog===null || apartmentsLog===null;
 
   // Guardar en Firestore solo cuando cambia la configuración (contraseñas),
@@ -1789,7 +1984,7 @@ function App(){
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans',system-ui,sans-serif"}}>
-      {toast&&<div style={{position:"fixed",top:20,right:20,zIndex:1000,padding:"12px 20px",borderRadius:10,background:toast.type==="success"?"#14532d":"#7f1d1d",color:"#fff",fontSize:14,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,0.5)",border:`1px solid ${toast.type==="success"?C.success:C.danger}`}}>{toast.msg}</div>}
+      {toast&&<div style={{position:"fixed",bottom:96,left:"50%",transform:"translateX(-50%)",maxWidth:"calc(100% - 32px)",textAlign:"center",zIndex:1000,padding:"12px 20px",borderRadius:10,background:toast.type==="success"?"#14532d":"#7f1d1d",color:"#fff",fontSize:14,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,0.5)",border:`1px solid ${toast.type==="success"?C.success:C.danger}`}}>{toast.msg}</div>}
       {view==="login"    &&<LoginView    loginRole={loginRole} setLoginRole={setLoginRole} pw={pw} setPw={setPw} error={loginError} onLogin={handleLogin}/>}
       {view==="employee" &&<EmployeeView appData={appData} update={update} showToast={showToast} onLogout={()=>{setView("login");setPw("");}}/>}
       {view==="admin"    &&<AdminView    appData={appData} update={update} showToast={showToast} onLogout={()=>{setView("login");setPw("");}} tab={adminTab} setTab={setAdminTab}/>}
