@@ -122,6 +122,26 @@ const DEFAULT_SETTINGS  = { adminPassword:"jose0322", empPassword:"123" };
 const fmtCOP   = (n) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n||0);
 const todayStr = () => new Date().toISOString().split("T")[0];
 const fmtDate  = (d) => { if(!d) return ""; const [y,m,day]=d.split("-"); return `${day}/${m}/${y}`; };
+const normTxt  = (s) => String(s||"").trim().toLowerCase();
+// Registros repetidos: misma fecha + mismo apartamento + mismo encargado, con al
+// menos uno sin pagar. Se conserva uno (el pagado, o el de más notas, o el
+// primero) y los demás sin pagar se proponen como duplicados.
+const findDuplicates = (cleanings) => {
+  const g={};
+  cleanings.forEach(c=>{const k=c.date+"|"+normTxt(c.apartmentName)+"|"+normTxt(c.employeeName);(g[k]=g[k]||[]).push(c);});
+  const out=[];
+  Object.values(g).filter(v=>v.length>1&&v.some(c=>!c.paid)).forEach(v=>{
+    const s=[...v].sort((a,b)=>(b.paid?1:0)-(a.paid?1:0)||(b.notes||"").length-(a.notes||"").length||(a.createdAt||0)-(b.createdAt||0));
+    s.slice(1).filter(c=>!c.paid).forEach(c=>out.push({...c,keepId:s[0].id}));
+  });
+  return out;
+};
+// Mismo apartamento y fecha registrado por personas distintas (¿trabajo en pareja?)
+const findPairs = (cleanings) => {
+  const g={};
+  cleanings.forEach(c=>{const k=c.date+"|"+normTxt(c.apartmentName);(g[k]=g[k]||[]).push(c);});
+  return Object.values(g).filter(v=>v.some(c=>!c.paid)&&new Set(v.map(c=>normTxt(c.employeeName))).size>1);
+};
 const uid      = () => Math.random().toString(36).slice(2,9);
 
 const C={bg:"#0b0f18",surface:"#141920",card:"#1a2130",border:"#252d3d",accent:"#f0b429",text:"#dce8f4",muted:"#6b7a99",success:"#22c55e",danger:"#ef4444",info:"#3b82f6"};
@@ -199,16 +219,32 @@ function EmployeeView({appData,update,showToast,onLogout}){
   const handleSubmit=()=>{
     if(!employee||!aptId||!date){showToast("Completa todos los campos","error");return;}
     if(!CLEANINGS_COL){showToast("Sin conexión con la base de datos","error");return;}
+    // Anti-duplicados: el mismo apartamento no se registra dos veces el mismo día.
+    const aptName=apt?.displayName||"";
+    const same=appData.cleanings.filter(c=>c.date===date&&(c.apartmentId===aptId||normTxt(c.apartmentName)===normTxt(aptName)));
+    if(same.some(c=>normTxt(c.employeeName)===normTxt(employee))){
+      showToast(`${aptName} ya está registrado por ti el ${fmtDate(date)}. No se guardó de nuevo.`,"error");return;
+    }
+    if(same.length>0 && !window.confirm(`${aptName} ya fue registrado el ${fmtDate(date)} por ${same.map(c=>c.employeeName||"otra persona").join(", ")}.\n\nSi lo hicieron juntas, NO lo registres otra vez: ya cuenta una vez.\n\n¿Registrarlo de todas formas?`)) return;
     const newC={date,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes,paid:false,amount:apt?.price||0,createdAt:Date.now()};
     setSaving(true);
-    // Se guarda directo como documento nuevo — Firebase le asigna su propio ID,
-    // así que dos colaboradores guardando a la vez nunca se pisan entre sí.
-    CLEANINGS_COL.add(newC)
+    // Cada limpieza tiene un ID fijo (fecha + apartamento + encargado). Si dos
+    // dispositivos o un doble toque intentan guardar la misma, la transacción
+    // detecta que ya existe y no la duplica. Personas distintas no se pisan.
+    const ref=CLEANINGS_COL.doc(`${date}_${aptId}_${employee}`.replace(/[\/\s]+/g,"-"));
+    db.runTransaction(async t=>{
+      const s=await t.get(ref);
+      if(s.exists) throw new Error("DUPLICADO");
+      t.set(ref,newC);
+    })
       .then(()=>{
         showToast("¡Limpieza registrada! ✅");
         setAptId("");setNotes("");setSelectedBuilding("");
       })
-      .catch(e=>{ console.error("Error guardando limpieza:",e); showToast("No se pudo guardar, revisa tu conexión e intenta de nuevo","error"); })
+      .catch(e=>{
+        if(e&&e.message==="DUPLICADO"){ showToast("Esta limpieza ya estaba registrada, no se duplicó","error"); return; }
+        console.error("Error guardando limpieza:",e); showToast("No se pudo guardar, revisa tu conexión e intenta de nuevo","error");
+      })
       .finally(()=>setSaving(false));
   };
   return(
@@ -665,6 +701,25 @@ function CleaningsTab({appData,update,showToast}){
       .then(()=>showToast("Registro eliminado","error"))
       .catch(e=>{console.error(e);showToast("No se pudo eliminar","error");});
   };
+  const markDup=(c,keepId)=>CLEANINGS_COL.doc(c.id).update({duplicado:true,duplicadoDe:keepId||"",amountOriginal:c.amount||0,amount:0,notes:"DUPLICADO | "+(c.notes||"")});
+  const markOne=(c)=>{
+    if(!window.confirm(`¿Marcar como duplicado ${c.apartmentName} del ${fmtDate(c.date)} (${c.employeeName||"sin encargado"})?\n\nDeja de contar en los totales, pero no se borra y se puede restaurar.`))return;
+    markDup(c).then(()=>showToast("Marcado como duplicado")).catch(e=>{console.error(e);showToast("No se pudo marcar","error");});
+  };
+  const autoDups=findDuplicates(appData.cleanings);
+  const pairs=findPairs(appData.cleanings);
+  const [showDupPanel,setShowDupPanel]=useState(false);
+  const fixAll=()=>{
+    const sum=autoDups.reduce((s,c)=>s+(c.amount||0),0);
+    if(!window.confirm(`Se marcarán ${autoDups.length} registros repetidos (${fmtCOP(sum)}) como duplicados.\n\nNo se borran: dejan de contar en los totales y se pueden restaurar. ¿Continuar?`))return;
+    const batch=db.batch();
+    autoDups.forEach(c=>batch.update(CLEANINGS_COL.doc(c.id),{duplicado:true,duplicadoDe:c.keepId,amountOriginal:c.amount||0,amount:0,notes:"DUPLICADO | "+(c.notes||"")}));
+    batch.commit().then(()=>showToast(`${autoDups.length} duplicados corregidos ✅`)).catch(e=>{console.error(e);showToast("No se pudo corregir","error");});
+  };
+  const restore=(c)=>{
+    CLEANINGS_COL.doc(c.id).update({duplicado:false,amount:c.amountOriginal||0,notes:String(c.notes||"").replace(/^DUPLICADO \| /,"")})
+      .then(()=>showToast("Registro restaurado ✅")).catch(e=>{console.error(e);showToast("No se pudo restaurar","error");});
+  };
   const saveEdit=(form)=>{
     const {id,...rest}=form;
     CLEANINGS_COL.doc(id).update(rest)
@@ -677,6 +732,39 @@ function CleaningsTab({appData,update,showToast}){
     <div>
       {editing&&<EditModal cleaning={editing} appData={appData} onSave={saveEdit} onClose={()=>setEditing(null)}/>}
       <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Todos los registros</h2>
+      {(autoDups.length>0||pairs.length>0||(appData.duplicates||[]).length>0)&&(
+        <Card style={{marginBottom:20,border:`1px solid ${autoDups.length>0?C.danger:C.border}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:14}}>⧉ Revisión de duplicados</div>
+              <div style={{color:C.muted,fontSize:12,marginTop:4}}>
+                {autoDups.length>0?<span style={{color:C.danger,fontWeight:700}}>{autoDups.length} repetidos ({fmtCOP(autoDups.reduce((s,c)=>s+(c.amount||0),0))}) · </span>:null}
+                {pairs.length} apto/día con varias personas · {(appData.duplicates||[]).length} ya marcados
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              {autoDups.length>0&&<Btn variant="danger" size="sm" onClick={fixAll}>Corregir {autoDups.length} repetidos</Btn>}
+              <Btn variant="ghost" size="sm" onClick={()=>setShowDupPanel(!showDupPanel)}>{showDupPanel?"Ocultar":"Ver detalle"}</Btn>
+            </div>
+          </div>
+          {showDupPanel&&(
+            <div style={{marginTop:14,fontSize:13}}>
+              {autoDups.length>0&&<div style={{marginBottom:12}}><Lbl>Repetidos (misma persona, mismo apto, mismo día)</Lbl>
+                {autoDups.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:`1px solid ${C.border}`}}><span>{fmtDate(c.date)} · {c.apartmentName} · {c.employeeName||"sin encargado"}</span><span style={{color:C.accent,fontWeight:700}}>{fmtCOP(c.amount)}</span></div>)}
+              </div>}
+              {pairs.length>0&&<div style={{marginBottom:12}}><Lbl>Varias personas en el mismo apto el mismo día — ¿pareja o doble registro?</Lbl>
+                {pairs.map(v=><div key={v[0].id} style={{padding:"6px 0",borderTop:`1px solid ${C.border}`}}>
+                  <div style={{fontWeight:700}}>{fmtDate(v[0].date)} · {v[0].apartmentName}</div>
+                  {v.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:4}}><span style={{color:C.muted}}>{c.employeeName||"sin encargado"} · {fmtCOP(c.amount)}{c.paid?" · pagado":""}</span>{!c.paid&&<Btn variant="ghost" size="sm" onClick={()=>markOne(c)}>Marcar duplicado</Btn>}</div>)}
+                </div>)}
+              </div>}
+              {(appData.duplicates||[]).length>0&&<div><Lbl>Ya marcados como duplicado (no cuentan)</Lbl>
+                {appData.duplicates.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"6px 0",borderTop:`1px solid ${C.border}`}}><span style={{color:C.muted}}>{fmtDate(c.date)} · {c.apartmentName} · {c.employeeName||"sin encargado"} · {fmtCOP(c.amountOriginal)}</span><Btn variant="ghost" size="sm" onClick={()=>restore(c)}>Restaurar</Btn></div>)}
+              </div>}
+            </div>
+          )}
+        </Card>
+      )}
       <Card style={{marginBottom:20}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
           <div><Lbl>Fecha</Lbl><Inp type="date" value={fDate} onChange={setFDate}/></div>
@@ -1051,7 +1139,9 @@ function App(){
     return ()=>unsub();
   },[]);
 
-  const appData = core ? {...core, cleanings: cleaningsLog||[], apartments: apartmentsLog||[]} : null;
+  // Los registros marcados como duplicado no cuentan en ningún total ni listado;
+  // quedan aparte (appData.duplicates) para poder revisarlos o restaurarlos.
+  const appData = core ? {...core, cleanings: (cleaningsLog||[]).filter(c=>!c.duplicado), duplicates: (cleaningsLog||[]).filter(c=>c.duplicado), apartments: apartmentsLog||[]} : null;
   const loading = !core || cleaningsLog===null || apartmentsLog===null;
 
   // Guardar en Firestore solo cuando cambia la configuración (contraseñas),
