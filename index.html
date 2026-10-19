@@ -432,16 +432,79 @@ function VideoPaso({cleaningId,k,label,video,showToast,autoStart,onDone}){
   );
 }
 
+// ── Lencería: piezas, peso aproximado (kg) y dotación normal por tipo de apartamento ──
+const LENCERIA_ITEMS = [["sabanas","Sábanas",0.6],["fundas","Fundas de almohada",0.15],["toallasCuerpo","Toallas de cuerpo",0.5],["toallasMano","Toallas de mano",0.15],["tapetes","Tapetes de baño",0.4],["cobijas","Cobijas / edredones",1.5]];
+const DOTACION = {
+  estudio:{sabanas:2,fundas:2,toallasCuerpo:2,toallasMano:1,tapetes:1,cobijas:0},
+  "1hab":{sabanas:2,fundas:2,toallasCuerpo:2,toallasMano:1,tapetes:1,cobijas:0},
+  "2-3hab":{sabanas:4,fundas:4,toallasCuerpo:4,toallasMano:2,tapetes:2,cobijas:0},
+};
+const dotacionDe = (tipo) => ({...(DOTACION[tipo]||DOTACION.estudio)});
+const kgDe = (m) => LENCERIA_ITEMS.reduce((s,[k,,kg])=>s+(Number((m||{})[k])||0)*kg,0);
+
+function Stepper({value,onChange,color}){
+  const b={width:44,height:44,borderRadius:12,border:`1.5px solid ${W.line}`,background:W.card,fontSize:22,fontWeight:800,color:W.ink,cursor:"pointer",fontFamily:"inherit",lineHeight:1};
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:6}}>
+      <button onClick={()=>onChange(Math.max(0,value-1))} style={b}>−</button>
+      <div style={{minWidth:34,textAlign:"center",fontSize:22,fontWeight:800,color:color||W.ink}}>{value}</div>
+      <button onClick={()=>onChange(value+1)} style={b}>+</button>
+    </div>
+  );
+}
+
+function LenceriaPaso({active,showToast,onDone}){
+  const base=dotacionDe(active.tipo);
+  const init=active.lenceria||{sale:base,entra:base,danada:{},nota:"",ok:false};
+  const [l,setL]=useState(init);
+  const timer=useRef(null);
+  const save=(next)=>{ clearTimeout(timer.current); timer.current=setTimeout(()=>{ CLEANINGS_COL.doc(active.id).update({lenceria:next}).catch(e=>{console.error(e);showToast("No se pudo guardar el conteo","error");}); },500); };
+  useEffect(()=>()=>clearTimeout(timer.current),[]);
+  const set=(grupo,k,v)=>{ const next={...l,[grupo]:{...(l[grupo]||{}),[k]:v},ok:false}; setL(next); save(next); };
+  const confirmar=()=>{ const next={...l,ok:true}; setL(next); clearTimeout(timer.current);
+    CLEANINGS_COL.doc(active.id).update({lenceria:next}).then(()=>{showToast("🧺 Conteo de lencería guardado");onDone&&onDone();}).catch(e=>{console.error(e);showToast("No se pudo guardar el conteo","error");}); };
+  const tot=(g)=>LENCERIA_ITEMS.reduce((s,[k])=>s+(Number((l[g]||{})[k])||0),0);
+  return(
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+        {[["Sale sucia",tot("sale"),W.amber],["Entra limpia",tot("entra"),W.brand],["Dañada",tot("danada"),tot("danada")?W.red:W.muted]].map(([t,v,c])=>(
+          <div key={t} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:14,padding:"10px 12px"}}><div style={{fontSize:11,fontWeight:700,color:W.muted}}>{t}</div><div style={{fontSize:22,fontWeight:800,color:c}}>{v}</div></div>
+        ))}
+      </div>
+      {LENCERIA_ITEMS.map(([k,label])=>{
+        const sale=Number((l.sale||{})[k])||0, entra=Number((l.entra||{})[k])||0, dan=Number((l.danada||{})[k])||0;
+        return(
+          <div key={k} style={{...wCard,padding:14,marginBottom:10}}>
+            <div style={{fontSize:16,fontWeight:800,marginBottom:10}}>{label}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div><div style={{fontSize:12,fontWeight:800,color:W.amber,marginBottom:6}}>Sale sucia</div><Stepper value={sale} onChange={v=>set("sale",k,v)} color={W.amber}/></div>
+              <div><div style={{fontSize:12,fontWeight:800,color:W.brand,marginBottom:6}}>Entra limpia</div><Stepper value={entra} onChange={v=>set("entra",k,v)} color={W.brand}/></div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:`1px dashed ${W.line}`}}>
+              <div style={{fontSize:13,fontWeight:700,color:dan?W.red:W.muted}}>Manchada o dañada</div>
+              <Stepper value={dan} onChange={v=>set("danada",k,v)} color={dan?W.red:W.muted}/>
+            </div>
+          </div>
+        );
+      })}
+      <div style={{fontSize:13,fontWeight:800,color:W.muted,margin:"6px 0"}}>Nota de lencería (manchas, piezas que faltan)</div>
+      <textarea value={l.nota||""} onChange={e=>{const next={...l,nota:e.target.value,ok:false};setL(next);save(next);}} rows={2} placeholder="Opcional" style={{...wInput,resize:"vertical",marginBottom:12}}/>
+      <WBtn onClick={confirmar} kind={l.ok?"secondary":"primary"}>{l.ok?"✓ Conteo guardado":"✓ Confirmar conteo de lencería"}</WBtn>
+    </div>
+  );
+}
+
 // ── Asistente paso a paso de una limpieza en curso ──
-const PASOS = ["Ingreso","Limpieza","Fotos","Salida"];
+const PASOS = ["Ingreso","Limpieza","Lencería","Fotos","Salida"];
 function CleaningWizard({active,now,saving,activeNotes,setActiveNotes,toggleCheck,finishCleaning,showToast}){
   const fotos=active.fotos||{}, cl=active.checklist||{}, videos=active.videos||{};
   const items=checklistFor(active.tipo);
   const doneItems=items.filter((_,i)=>cl["i"+i]).length+(cl.zona?1:0);
   const totalItems=items.length+1;
   const fotosHechas=FOTOS_FINALES.filter(([k])=>fotos[k]).length;
-  const listo=[!!videos.entrada, doneItems===totalItems, fotosHechas===FOTOS_FINALES.length, !!videos.salida];
-  const [step,setStep]=useState(()=>!videos.entrada?0:doneItems<totalItems?1:fotosHechas<FOTOS_FINALES.length?2:3);
+  const lenOk=!!(active.lenceria&&active.lenceria.ok);
+  const listo=[!!videos.entrada, doneItems===totalItems, lenOk, fotosHechas===FOTOS_FINALES.length, !!videos.salida];
+  const [step,setStep]=useState(()=>!videos.entrada?0:doneItems<totalItems?1:!lenOk?2:fotosHechas<FOTOS_FINALES.length?3:4);
   const [thumbs,setThumbs]=useState({});
   useEffect(()=>{
     const u=CLEANINGS_COL.doc(active.id).collection("fotos").onSnapshot(s=>{const m={};s.forEach(d=>{m[d.id]=d.data().data;});setThumbs(m);},e=>console.error(e));
@@ -462,7 +525,7 @@ function CleaningWizard({active,now,saving,activeNotes,setActiveNotes,toggleChec
             </div>
             <div style={{background:W.amberSoft,color:W.amber,fontWeight:800,fontSize:16,padding:"8px 12px",borderRadius:12,whiteSpace:"nowrap"}}>⏱ {fmtMin((now-active.startedAt)/60000)}</div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginTop:12}}>
             {PASOS.map((p,i)=>(
               <button key={p} onClick={()=>setStep(i)} style={{background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
                 <div style={{height:6,borderRadius:3,background:listo[i]?W.brand:i===step?W.amber:W.line}}/>
@@ -498,8 +561,15 @@ function CleaningWizard({active,now,saving,activeNotes,setActiveNotes,toggleChec
             </button>);})}
         </div>
 
-        {/* Paso 3: fotos */}
+        {/* Paso 3: lencería */}
         <div style={{display:step===2?"block":"none"}}>
+          <h2 style={title}>Lencería</h2>
+          <p style={sub}>Cuenta lo que sacas sucio para la lavandería y lo que pones limpio. Ya viene la dotación normal: solo corrige lo que sea distinto.</p>
+          <LenceriaPaso active={active} showToast={showToast} onDone={()=>setStep(3)}/>
+        </div>
+
+        {/* Paso 4: fotos */}
+        <div style={{display:step===3?"block":"none"}}>
           <h2 style={title}>Fotos finales</h2>
           <p style={sub}>{fotosHechas} de {FOTOS_FINALES.length}. Toma cada foto con el apartamento ya listo.</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -507,8 +577,8 @@ function CleaningWizard({active,now,saving,activeNotes,setActiveNotes,toggleChec
           </div>
         </div>
 
-        {/* Paso 4: salida */}
-        <div style={{display:step===3?"block":"none"}}>
+        {/* Paso 5: salida */}
+        <div style={{display:step===4?"block":"none"}}>
           <h2 style={title}>Salida</h2>
           <p style={sub}>Graba el apartamento terminado, anota novedades y toca Terminé al salir.</p>
           <VideoPaso cleaningId={active.id} k="salida" label="Video de salida" video={videos.salida} showToast={showToast}/>
@@ -522,9 +592,9 @@ function CleaningWizard({active,now,saving,activeNotes,setActiveNotes,toggleChec
 
       {/* Barra inferior */}
       <div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:20,background:W.card,borderTop:`1px solid ${W.line}`,padding:"12px 16px calc(12px + env(safe-area-inset-bottom))"}}>
-        <div style={{maxWidth:520,margin:"0 auto",display:"grid",gridTemplateColumns:step>0&&step<3?"1fr 2fr":"1fr",gap:10}}>
+        <div style={{maxWidth:520,margin:"0 auto",display:"grid",gridTemplateColumns:step>0&&step<4?"1fr 2fr":"1fr",gap:10}}>
           {step>0&&<WBtn kind="secondary" onClick={()=>setStep(step-1)}>← Atrás</WBtn>}
-          {step<3&&<WBtn onClick={()=>setStep(step+1)}>{step===0&&!videos.entrada?"Seguir sin video →":"Siguiente →"}</WBtn>}
+          {step<4&&<WBtn onClick={()=>setStep(step+1)}>{step===0&&!videos.entrada?"Seguir sin video →":"Siguiente →"}</WBtn>}
         </div>
       </div>
     </div>
@@ -612,6 +682,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
     const faltanVideos=[["entrada","video de ingreso"],["salida","video de salida"]].filter(([k])=>!(active.videos||{})[k]).map(([,l])=>l);
     const faltas=[];
     if(faltanVideos.length) faltas.push(faltanVideos.join(" y "));
+    if(!(active.lenceria&&active.lenceria.ok)) faltas.push("conteo de lencería");
     if(done<total) faltas.push(`${total-done} tareas del checklist`);
     if(faltanFotos.length) faltas.push(`fotos: ${faltanFotos.join(", ")}`);
     if(faltas.length && !window.confirm(`Te falta:\n• ${faltas.join("\n• ")}\n\n¿Terminar de todas formas?`)) return;
@@ -786,7 +857,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
             <div key={r.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"12px 0",borderBottom:`1px solid ${W.line}`}}>
               <div>
                 <div style={{fontWeight:800,fontSize:15}}>{r.c.apartmentName}</div>
-                <div style={{fontSize:12,color:W.muted,marginTop:2}}>{toHM(r.c.startedAt)} → {r.c.finishedAt?toHM(r.c.finishedAt):"en curso"} · 🎥 {Object.keys(r.c.videos||{}).length} · 📷 {Object.keys(r.c.fotos||{}).length}</div>
+                <div style={{fontSize:12,color:W.muted,marginTop:2}}>{toHM(r.c.startedAt)} → {r.c.finishedAt?toHM(r.c.finishedAt):"en curso"} · 🎥 {Object.keys(r.c.videos||{}).length} · 📷 {Object.keys(r.c.fotos||{}).length}{r.c.lenceria?` · 🧺 ${LENCERIA_ITEMS.reduce((t,[k])=>t+(Number((r.c.lenceria.sale||{})[k])||0),0)}`:""}</div>
               </div>
               <div style={{fontWeight:800,fontSize:15,color:r.c.finishedAt?W.ink:W.amber}}>{fmtMin(r.dur)}</div>
             </div>
@@ -963,7 +1034,7 @@ function CleaningHistoryEmployee({cleanings}){
 }
 
 function AdminView({appData,update,showToast,onLogout,tab,setTab}){
-  const tabs=[["dashboard","📊 Resumen"],["agenda","📅 Agenda"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
+  const tabs=[["dashboard","📊 Resumen"],["agenda","📅 Agenda"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["lenceria","🧺 Lencería"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
   return(
     <div style={{minHeight:"100vh"}}>
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`}}>
@@ -988,6 +1059,7 @@ function AdminView({appData,update,showToast,onLogout,tab,setTab}){
         {tab==="cleanings"&&<CleaningsTab appData={appData} update={update} showToast={showToast}/>}
         {tab==="agenda"   &&<AgendaTab    appData={appData} showToast={showToast}/>}
         {tab==="tiempos"  &&<TiemposTab   appData={appData}/>}
+        {tab==="lenceria" &&<LenceriaTab  appData={appData}/>}
         {tab==="clients"  &&<ClientsTab   appData={appData} update={update} showToast={showToast}/>}
         {tab==="config"   &&<ConfigTab    appData={appData} update={update} showToast={showToast}/>}
       </div>
@@ -1130,6 +1202,14 @@ function FotosModal({cleaning,onClose}){
         </div>
         {Object.keys(cleaning.videos||{}).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12,marginBottom:16}}>
           {[["entrada","Video de entrada"],["salida","Video de salida"]].filter(([k])=>(cleaning.videos||{})[k]).map(([k,l])=>{const v=cleaning.videos[k];return(<div key={k}><video src={v.url} controls playsInline preload="metadata" style={{width:"100%",borderRadius:8,background:"#000",display:"block"}}/><div style={{fontSize:12,color:C.muted,marginTop:4}}>{l} · {toHM(v.ts)}{v.dur?` · ${mmss(v.dur)}`:""}</div></div>);})}
+        </div>}
+        {cleaning.lenceria&&<div style={{background:C.surface,borderRadius:10,padding:12,marginBottom:16,fontSize:13}}>
+          <div style={{fontWeight:800,marginBottom:6}}>🧺 Lencería{cleaning.lenceria.ok?"":" (sin confirmar)"}</div>
+          <div style={{display:"grid",gridTemplateColumns:"auto auto auto auto",gap:"4px 18px",color:C.muted}}>
+            <span></span><span>Salió sucia</span><span>Entró limpia</span><span>Dañada</span>
+            {LENCERIA_ITEMS.map(([k,l])=>[<span key={k+"l"} style={{color:C.text}}>{l}</span>,<span key={k+"s"}>{(cleaning.lenceria.sale||{})[k]||0}</span>,<span key={k+"e"}>{(cleaning.lenceria.entra||{})[k]||0}</span>,<span key={k+"d"} style={{color:(cleaning.lenceria.danada||{})[k]?C.danger:C.muted}}>{(cleaning.lenceria.danada||{})[k]||0}</span>])}
+          </div>
+          {cleaning.lenceria.nota&&<div style={{marginTop:6,color:C.text}}>📝 {cleaning.lenceria.nota}</div>}
         </div>}
         {fotos===null?<div style={{color:C.muted,padding:30,textAlign:"center"}}>Cargando fotos...</div>
         :fotos.length===0?<div style={{color:C.muted,padding:30,textAlign:"center"}}>Sin fotos</div>
@@ -1509,6 +1589,91 @@ function AgendaTab({appData,showToast}){
         ))}
         {grupos.length===0&&<div style={{color:C.muted,fontSize:13}}>Todos los apartamentos ya están en la agenda de este día.</div>}
       </Card>
+    </div>
+  );
+}
+
+// 🧺 Lencería: qué sale sucio hacia la lavandería, qué entra limpio y qué se daña
+function LenceriaTab({appData}){
+  const k=getCosts(appData.settings);
+  const costoKg=k.lenceriaJuego/2.5; // un juego de lencería pesa unos 2,5 kg
+  const clients=[...new Set(appData.apartments.map(a=>a.clientName).filter(Boolean))].sort();
+  const [fClient,setFClient]=useState("");
+  const [desde,setDesde]=useState(daysAgoStr(14));
+  const [hasta,setHasta]=useState(todayStr());
+  const conLen=appData.cleanings.filter(c=>c.lenceria&&c.date>=desde&&c.date<=hasta&&(!fClient||c.clientName===fClient));
+  const sum=(list,g)=>{const o={};LENCERIA_ITEMS.forEach(([key])=>{o[key]=list.reduce((s,c)=>s+(Number(((c.lenceria||{})[g]||{})[key])||0),0);});return o;};
+  const sale=sum(conLen,"sale"), entra=sum(conLen,"entra"), danada=sum(conLen,"danada");
+  const kgSale=kgDe(sale);
+  const porApto={};
+  conLen.forEach(c=>{const a=porApto[c.apartmentName]||(porApto[c.apartmentName]={apt:c.apartmentName,cliente:c.clientName,n:0,list:[]});a.n++;a.list.push(c);});
+  const aptRows=Object.values(porApto).map(a=>({...a,sale:sum(a.list,"sale"),entra:sum(a.list,"entra"),danada:sum(a.list,"danada")})).sort((x,y)=>kgDe(y.sale)-kgDe(x.sale));
+  const porDia={};
+  conLen.forEach(c=>{(porDia[c.date]=porDia[c.date]||[]).push(c);});
+  const diaRows=Object.entries(porDia).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,list])=>({d,n:list.length,sale:sum(list,"sale")}));
+  const totalPiezas=(o)=>LENCERIA_ITEMS.reduce((s,[key])=>s+(o[key]||0),0);
+  const sinConteo=appData.cleanings.filter(c=>c.startedAt&&!c.enCurso&&!(c.lenceria&&c.lenceria.ok)&&c.date>=desde&&c.date<=hasta&&(!fClient||c.clientName===fClient)).length;
+  const th={textAlign:"left",padding:"10px 12px",color:C.muted,fontWeight:700,whiteSpace:"nowrap",fontSize:12};
+  const td={padding:"10px 12px",whiteSpace:"nowrap"};
+  const kpi=(label,value,sub,color)=>(<Card style={{padding:16}}><div style={{fontSize:12,color:C.muted}}>{label}</div><div style={{fontSize:20,fontWeight:800,color:color||C.text,marginTop:4}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>{sub}</div>}</Card>);
+  return(
+    <div>
+      <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:800}}>Lencería</h2>
+      <div style={{color:C.muted,fontSize:13,marginBottom:18}}>Lo que las aseadoras cuentan en cada limpieza: lo que sale sucio a la lavandería, lo que entra limpio y lo que sale manchado o dañado.</div>
+      <Card style={{marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+          <div><Lbl>Cliente</Lbl><Sel value={fClient} onChange={setFClient}><option value="">Todos</option>{clients.map(c=><option key={c} value={c}>{c}</option>)}</Sel></div>
+          <div><Lbl>Desde</Lbl><Inp type="date" value={desde} onChange={setDesde}/></div>
+          <div><Lbl>Hasta</Lbl><Inp type="date" value={hasta} onChange={setHasta}/></div>
+        </div>
+      </Card>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:20}}>
+        {kpi("Limpiezas con conteo",String(conLen.length),sinConteo?`${sinConteo} terminadas sin conteo`:"todas con conteo",sinConteo?C.danger:C.text)}
+        {kpi("Piezas a lavandería",String(totalPiezas(sale)),`${totalPiezas(entra)} piezas limpias repuestas`)}
+        {kpi("Kilos aproximados",`${kgSale.toFixed(1)} kg`,`~${Math.ceil(kgSale/8)} cargas de 8 kg`)}
+        {kpi("Costo estimado de lavado",fmtCOP(Math.round(kgSale*costoKg)),`a ${fmtCOP(Math.round(costoKg))} por kg`,C.accent)}
+        {kpi("Manchadas o dañadas",String(totalPiezas(danada)),"piezas a revisar o reponer",totalPiezas(danada)?C.danger:C.muted)}
+      </div>
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Por pieza</h3>
+      <Card style={{padding:0,overflow:"hidden",marginBottom:24}}><div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface}}>{["Pieza","Salió sucia","Entró limpia","Diferencia","Manchada o dañada"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>{LENCERIA_ITEMS.map(([key,l])=>{const dif=(entra[key]||0)-(sale[key]||0);return(
+            <tr key={key} style={{borderTop:`1px solid ${C.border}`}}>
+              <td style={{...td,fontWeight:700}}>{l}</td><td style={td}>{sale[key]||0}</td><td style={td}>{entra[key]||0}</td>
+              <td style={{...td,color:dif<0?C.danger:dif>0?C.info:C.muted,fontWeight:700}}>{dif>0?"+":""}{dif}</td>
+              <td style={{...td,color:danada[key]?C.danger:C.muted,fontWeight:700}}>{danada[key]||0}</td>
+            </tr>);})}</tbody>
+        </table>
+      </div></Card>
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Por apartamento</h3>
+      <Card style={{padding:0,overflow:"hidden",marginBottom:24}}><div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface}}>{["Apartamento","Limpiezas",...LENCERIA_ITEMS.map(([,l])=>l),"Kg","Costo lavado","Dañadas"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>{aptRows.length===0?<tr><td colSpan={LENCERIA_ITEMS.length+5} style={{...td,textAlign:"center",color:C.muted,padding:30}}>Todavía no hay conteos en este rango</td></tr>
+            :aptRows.map(a=>(
+            <tr key={a.apt} style={{borderTop:`1px solid ${C.border}`}}>
+              <td style={{...td,fontWeight:700}}>{a.apt}</td><td style={td}>{a.n}</td>
+              {LENCERIA_ITEMS.map(([key])=><td key={key} style={td}>{a.sale[key]||0}</td>)}
+              <td style={td}>{kgDe(a.sale).toFixed(1)}</td>
+              <td style={{...td,color:C.accent,fontWeight:700}}>{fmtCOP(Math.round(kgDe(a.sale)*costoKg))}</td>
+              <td style={{...td,color:totalPiezas(a.danada)?C.danger:C.muted,fontWeight:700}}>{totalPiezas(a.danada)}</td>
+            </tr>))}</tbody>
+        </table>
+      </div></Card>
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Lo que le llega a la lavandería por día</h3>
+      <Card style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface}}>{["Fecha","Limpiezas",...LENCERIA_ITEMS.map(([,l])=>l),"Kg","Cargas de 8 kg"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>{diaRows.length===0?<tr><td colSpan={LENCERIA_ITEMS.length+4} style={{...td,textAlign:"center",color:C.muted,padding:30}}>Sin datos</td></tr>
+            :diaRows.map(r=>(
+            <tr key={r.d} style={{borderTop:`1px solid ${C.border}`}}>
+              <td style={{...td,color:C.muted}}>{fmtDate(r.d)}</td><td style={td}>{r.n}</td>
+              {LENCERIA_ITEMS.map(([key])=><td key={key} style={td}>{r.sale[key]||0}</td>)}
+              <td style={td}>{kgDe(r.sale).toFixed(1)}</td><td style={{...td,fontWeight:700}}>{Math.ceil(kgDe(r.sale)/8)}</td>
+            </tr>))}</tbody>
+        </table>
+      </div></Card>
     </div>
   );
 }
