@@ -1,0 +1,31 @@
+plugins { id 'com.android.application' }
+
+// App de Android que abre https://limpieza-apartamentos.vercel.app en pantalla completa
+// (Trusted Web Activity con Chrome): misma app, mismos datos, se actualiza sola.
+def runNumber = Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '1')
+
+android {
+    namespace 'com.freshlavanderia.limpieza'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.freshlavanderia.limpieza'
+        minSdk 21
+        targetSdk 34
+        versionCode runNumber
+        versionName "1.0.${runNumber}"
+    }
+    signingConfigs {
+        release {
+            storeFile file('../firma.jks')
+            storePassword System.getenv('KEYSTORE_PASSWORD')
+            keyAlias 'limpieza'
+            keyPassword System.getenv('KEYSTORE_PASSWORD')
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+
+dependencies { implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0' }

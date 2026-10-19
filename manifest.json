@@ -1,0 +1,19 @@
+{
+  "name": "Limpieza Pro",
+  "short_name": "Limpieza",
+  "description": "Limpiezas de apartamentos: agenda del día, videos, fotos, lencería y horas.",
+  "id": "/",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E7C66",
+  "theme_color": "#0E7C66",
+  "lang": "es-CO",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

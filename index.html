@@ -4,6 +4,14 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Limpieza Pro</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#0E7C66"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-title" content="Limpieza"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
   <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js"></script>
@@ -44,6 +52,11 @@
       }
     }, 8000);
   });
+</script>
+<script>
+  if ("serviceWorker" in navigator) window.addEventListener("load", function(){ navigator.serviceWorker.register("/sw.js").catch(function(){}); });
+  window.__instalar = null;
+  window.addEventListener("beforeinstallprompt", function(e){ e.preventDefault(); window.__instalar = e; window.dispatchEvent(new Event("instalable")); });
 </script>
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
@@ -227,6 +240,46 @@ function Card({children,style:ex={}}){return <div style={{background:C.card,bord
 function Lbl({children}){return <div style={{fontSize:"12px",fontWeight:"600",color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:"6px"}}>{children}</div>;}
 function Badge({paid}){return <span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:paid?"#14532d":"#450a0a",color:paid?C.success:C.danger}}>{paid?"✓ Pagado":"Pendiente"}</span>;}
 
+// 📲 Instalar en el celular: APK directo en Android, "Agregar a inicio" en iPhone
+const APK_URL = "/descargas/limpieza-pro.apk";
+function InstalarApp(){
+  const ua = navigator.userAgent || "";
+  const ios = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  const android = /Android/i.test(ua);
+  const instalada = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone || document.referrer.startsWith("android-app://");
+  const [abierto,setAbierto]=useState(false);
+  const [, forzar]=useState(0);
+  const [hayApk,setHayApk]=useState(null);
+  useEffect(()=>{ if(ios) return; fetch(APK_URL,{method:"HEAD",cache:"no-store"}).then(r=>setHayApk(r.ok)).catch(()=>setHayApk(false)); },[]);
+  useEffect(()=>{ const f=()=>forzar(x=>x+1); window.addEventListener("instalable",f); return ()=>window.removeEventListener("instalable",f); },[]);
+  if(instalada) return null;
+  const paso=(n,t)=>(<div style={{display:"flex",gap:10,alignItems:"flex-start",fontSize:13,color:C.text,marginTop:8}}><span style={{flex:"0 0 22px",height:22,borderRadius:"50%",background:C.accent,color:"#0b0f18",fontWeight:800,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{n}</span><span style={{lineHeight:1.45}}>{t}</span></div>);
+  return(
+    <Card style={{marginTop:16}}>
+      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+        <img src="/icons/icon-192.png" alt="" width="44" height="44" style={{borderRadius:10}}/>
+        <div style={{flex:1}}><div style={{fontWeight:800,fontSize:15}}>Instala la app en tu celular</div><div style={{fontSize:12,color:C.muted}}>Queda con su ícono y se abre en pantalla completa</div></div>
+      </div>
+      {ios?(<div style={{marginTop:12}}>
+        {paso(1,<>Abre esta página en <b>Safari</b></>)}
+        {paso(2,<>Toca el botón <b>Compartir</b> (el cuadrito con la flecha ⬆️)</>)}
+        {paso(3,<>Elige <b>Agregar a pantalla de inicio</b> y luego <b>Agregar</b></>)}
+      </div>):(<div style={{marginTop:12}}>
+        {hayApk!==false&&<a href={APK_URL} download style={{display:"block",textAlign:"center",textDecoration:"none",padding:"13px",borderRadius:10,background:C.accent,color:"#0b0f18",fontWeight:800,fontSize:15}}>⬇️ Descargar app para Android</a>}
+        {hayApk===false&&<div style={{fontSize:13,color:C.muted,lineHeight:1.45}}>En Chrome toca el menú <b>⋮</b> y elige <b>Instalar app</b> (o <b>Agregar a pantalla principal</b>).</div>}
+        {hayApk!==false&&<button onClick={()=>setAbierto(!abierto)} style={{background:"none",border:"none",color:C.muted,fontSize:12,marginTop:10,cursor:"pointer",fontFamily:"inherit",padding:0}}>{abierto?"▾":"▸"} Cómo instalarla</button>}
+        {hayApk!==false&&abierto&&<div>
+          {paso(1,<>Toca <b>Descargar</b> y abre el archivo <b>limpieza-pro.apk</b> cuando termine</>)}
+          {paso(2,<>Si el celular pregunta, permite <b>instalar apps de esta fuente</b> (es solo para esta app)</>)}
+          {paso(3,<>Toca <b>Instalar</b>. El ícono queda en tu pantalla</>)}
+        </div>}
+        {window.__instalar&&<button onClick={()=>{const p=window.__instalar;p.prompt();p.userChoice.finally(()=>{window.__instalar=null;forzar(x=>x+1);});}} style={{width:"100%",marginTop:12,padding:"11px",borderRadius:10,border:`1px solid ${C.border}`,background:"transparent",color:C.text,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>O instálala sin descargar archivo</button>}
+        {!android&&<div style={{fontSize:11,color:C.muted,marginTop:10}}>Abre esta página desde el celular para instalarla.</div>}
+      </div>)}
+    </Card>
+  );
+}
+
 function LoginView({loginRole,setLoginRole,pw,setPw,error,onLogin}){
   return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -248,6 +301,7 @@ function LoginView({loginRole,setLoginRole,pw,setPw,error,onLogin}){
           {error&&<div style={{color:C.danger,fontSize:13,marginBottom:12,fontWeight:600}}>{error}</div>}
           <Btn onClick={onLogin} style={{width:"100%",padding:"13px",fontSize:15}}>Entrar →</Btn>
         </Card>
+        <InstalarApp/>
       </div>
     </div>
   );

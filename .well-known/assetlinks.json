@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.freshlavanderia.limpieza",
+    "sha256_cert_fingerprints": ["71:CA:0C:80:E8:F2:09:2E:1B:67:75:D7:0C:F5:C0:12:D6:98:10:A9:64:55:CC:3F:69:48:0E:D1:0D:F2:EA:84"]
+  }
+}]
