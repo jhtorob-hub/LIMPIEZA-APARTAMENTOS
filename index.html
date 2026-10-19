@@ -120,7 +120,8 @@ const DEFAULT_EMPLOYEES = ["AMADALITH","ARIANNY","YAZMINA","NUBIA","YESSICA","AL
 const DEFAULT_SETTINGS  = { adminPassword:"jose0322", empPassword:"123" };
 
 const fmtCOP   = (n) => new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n||0);
-const todayStr = () => new Date().toISOString().split("T")[0];
+// Fecha LOCAL (Colombia). Antes usaba UTC y después de las 7 p.m. ponía la fecha del día siguiente.
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const fmtDate  = (d) => { if(!d) return ""; const [y,m,day]=d.split("-"); return `${day}/${m}/${y}`; };
 const normTxt  = (s) => String(s||"").trim().toLowerCase();
 // Registros repetidos: misma fecha + mismo apartamento + mismo encargado, con al
@@ -136,6 +137,61 @@ const findDuplicates = (cleanings) => {
   });
   return out;
 };
+// ── Tiempos, checklist y costos ──────────────────────────────────────────
+const APT_TYPES = { estudio:"Estudio", "1hab":"1 habitación", "2-3hab":"2–3 habitaciones" };
+const DEFAULT_JUEGOS = { estudio:1, "1hab":1, "2-3hab":2.5 };
+// Parámetros de costo por defecto (se editan en Config → Costos)
+const DEFAULT_COSTS = { costoHora:20700, lenceriaJuego:8000, insumos:5200, admin:5000, aiuPct:10, ivaPct:19, preciosConIva:true };
+const ZONAS_PROFUNDAS = ["Nevera y horno","Juntas y cortina del baño","Detrás y debajo de muebles","Vidrios, marcos y ventanas","Colchón, cortinas y lámparas"];
+const checklistFor = (tipo) => {
+  const items = [
+    "Ventilar y sacar la basura",
+    "Retirar lencería sucia y toallas",
+    "Cocina: loza, mesón, estufa y microondas",
+    "Nevera: sacar alimentos y limpiar",
+    "Baño: sanitario, ducha, lavamanos y espejo",
+    "Polvo de arriba hacia abajo",
+  ];
+  if (tipo === "2-3hab") items.push("Habitaciones adicionales", "Jacuzzi: vaciar, desinfectar y secar");
+  items.push(
+    "Tender camas y poner toallas limpias",
+    "Barrer y trapear",
+    "Reponer papel, jabón y amenidades",
+    "Revisar daños, faltantes y objetos olvidados",
+  );
+  return items;
+};
+const getPos = () => new Promise(res => {
+  try {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(
+      p => res({ lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6), acc:Math.round(p.coords.accuracy) }),
+      () => res(null),
+      { enableHighAccuracy:true, timeout:8000, maximumAge:60000 }
+    );
+  } catch (e) { res(null); }
+});
+const pad2 = (n) => String(n).padStart(2,"0");
+const toHM = (ts) => { if(!ts) return ""; const d=new Date(ts); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const fmtMin = (m) => { if(m==null||isNaN(m)) return "—"; const t=Math.max(0,Math.round(m)); const h=Math.floor(t/60), mm=t%60; return h?`${h} h ${pad2(mm)} min`:`${mm} min`; };
+const durMin = (c) => (c.startedAt && c.finishedAt && c.finishedAt > c.startedAt) ? (c.finishedAt - c.startedAt)/60000 : null;
+const getCosts = (settings) => ({ ...DEFAULT_COSTS, ...((settings && settings.costs) || {}) });
+const juegosOf = (a) => (a && a.juegos !== undefined && a.juegos !== "" && a.juegos !== null) ? Number(a.juegos) : (DEFAULT_JUEGOS[a && a.tipo] ?? 1);
+// Ingreso sin IVA hoy (IVA sobre todo) y con AIU (IVA solo sobre el AIU), costo y ganancia
+const econ = (price, mins, juegos, k) => {
+  const p = Number(price) || 0;
+  const hoy = k.preciosConIva ? p / (1 + k.ivaPct/100) : p;
+  const aiu = k.preciosConIva ? p / (1 + (k.ivaPct/100) * (k.aiuPct/100)) : p;
+  const fijo = k.insumos + k.admin + (juegos || 0) * k.lenceriaJuego;
+  const cost = mins == null ? null : (mins/60) * k.costoHora + fijo;
+  return { hoy, aiu, cost,
+    gHoy: cost == null ? null : hoy - cost,
+    gAiu: cost == null ? null : aiu - cost,
+    maxHoy: (hoy - fijo) / k.costoHora * 60,
+    maxAiu: (aiu - fijo) / k.costoHora * 60 };
+};
+const daysAgoStr = (n) => { const d=new Date(); d.setDate(d.getDate()-n); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
+
 // Mismo apartamento y fecha registrado por personas distintas (¿trabajo en pareja?)
 const findPairs = (cleanings) => {
   const g={};
@@ -185,8 +241,174 @@ function LoginView({loginRole,setLoginRole,pw,setPw,error,onLogin}){
   );
 }
 
+// ── Fotos (comprimidas, guardadas en una subcolección de cada limpieza) ──
+const FOTOS_FINALES = [["cama","Cama tendida"],["bano","Baño"],["cocina","Cocina"],["sala","Sala"],["zona","Zona profunda"]];
+const compressImage = (file, maxW=900, q=0.6) => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, maxW / Math.max(img.width, img.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      res(cv.toDataURL("image/jpeg", q));
+    };
+    img.onerror = rej; img.src = r.result;
+  };
+  r.onerror = rej; r.readAsDataURL(file);
+});
+
+function FotoSlot({cleaningId,k,label,has,thumb,showToast,big}){
+  const [busy,setBusy]=useState(false);
+  const onFile=async(e)=>{
+    const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return;
+    setBusy(true);
+    try{
+      const data=await compressImage(f);
+      const ts=Date.now();
+      await CLEANINGS_COL.doc(cleaningId).collection("fotos").doc(k).set({data,ts,label});
+      await CLEANINGS_COL.doc(cleaningId).update({[`fotos.${k}`]:ts});
+      showToast(`📷 ${label}: guardada`);
+    }catch(err){ console.error(err); showToast("No se pudo guardar la foto, intenta de nuevo","error"); }
+    finally{ setBusy(false); }
+  };
+  return(
+    <label style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:10,minHeight:big?150:110,border:`2px ${has?"solid":"dashed"} ${has?C.success:C.border}`,borderRadius:12,cursor:"pointer",background:C.surface,textAlign:"center"}}>
+      {thumb?<img src={thumb} alt={label} style={{width:"100%",maxHeight:big?160:90,objectFit:"cover",borderRadius:8}}/>:<span style={{fontSize:big?36:28}}>📷</span>}
+      <span style={{fontSize:13,fontWeight:700,color:C.text}}>{label}</span>
+      <span style={{fontSize:11,fontWeight:700,color:busy?C.accent:has?C.success:C.muted}}>{busy?"Guardando...":has?"✓ Lista (toca para cambiar)":"Toca para tomar la foto"}</span>
+      <input type="file" accept="image/*" capture="environment" onChange={onFile} style={{display:"none"}}/>
+    </label>
+  );
+}
+
+function PasoHeader({n,title,done,sub}){
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+      <div style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,flexShrink:0,background:done?C.success:C.accent,color:"#0b0f18"}}>{done?"✓":n}</div>
+      <div><div style={{fontWeight:800,fontSize:16}}>{title}</div>{sub&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div>}</div>
+    </div>
+  );
+}
+
+// Pantalla paso a paso de la limpieza en curso
+function ActiveCleaning({active,now,saving,activeNotes,setActiveNotes,toggleCheck,finishCleaning,showToast}){
+  const [thumbs,setThumbs]=useState({});
+  useEffect(()=>{
+    const u=CLEANINGS_COL.doc(active.id).collection("fotos").onSnapshot(s=>{const m={};s.forEach(d=>{m[d.id]=d.data().data;});setThumbs(m);},e=>console.error(e));
+    return ()=>u();
+  },[active.id]);
+  const fotos=active.fotos||{}, cl=active.checklist||{};
+  const items=checklistFor(active.tipo);
+  const doneItems=items.filter((_,i)=>cl["i"+i]).length+(cl.zona?1:0);
+  const totalItems=items.length+1;
+  const fotosHechas=FOTOS_FINALES.filter(([k])=>fotos[k]).length;
+  const box={background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:16,marginBottom:14};
+  return(
+    <div style={{marginBottom:20}}>
+      <div style={{...box,border:`2px solid ${C.accent}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+          <div>
+            <div style={{fontSize:12,color:C.accent,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.05em"}}>⏱ Limpieza en curso</div>
+            <div style={{fontSize:22,fontWeight:800,marginTop:4}}>{active.apartmentName}</div>
+            <div style={{fontSize:12,color:C.muted,marginTop:2}}>{active.employeeName} · entrada {toHM(active.startedAt)}{active.startLoc?" · 📍 ubicación guardada":" · sin ubicación"}</div>
+          </div>
+          <div style={{textAlign:"right"}}><div style={{fontSize:11,color:C.muted}}>Tiempo</div><div style={{fontSize:24,fontWeight:800,color:C.accent}}>{fmtMin((now-active.startedAt)/60000)}</div></div>
+        </div>
+      </div>
+
+      <div style={box}>
+        <PasoHeader n={1} title="Llegada" done={!!fotos.entrada} sub={`Hora de entrada ${toHM(active.startedAt)} guardada. Toma una foto del apartamento como lo encontraste.`}/>
+        <FotoSlot cleaningId={active.id} k="entrada" label="Foto de entrada" has={!!fotos.entrada} thumb={thumbs.entrada} showToast={showToast} big/>
+      </div>
+
+      <div style={box}>
+        <PasoHeader n={2} title="Limpieza" done={doneItems===totalItems} sub={`${doneItems} de ${totalItems} tareas`}/>
+        {items.map((it,i)=>{const on=!!cl["i"+i];return(
+          <label key={i} style={{display:"flex",gap:12,alignItems:"center",padding:"11px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer",fontSize:15,color:on?C.muted:C.text,textDecoration:on?"line-through":"none"}}>
+            <input type="checkbox" checked={on} onChange={()=>toggleCheck("i"+i)} style={{width:22,height:22,accentColor:C.success,flexShrink:0}}/>{it}
+          </label>);})}
+        <label style={{display:"flex",gap:12,alignItems:"center",padding:"11px 0",cursor:"pointer",fontSize:15,fontWeight:700,color:cl.zona?C.muted:C.info,textDecoration:cl.zona?"line-through":"none"}}>
+          <input type="checkbox" checked={!!cl.zona} onChange={()=>toggleCheck("zona")} style={{width:22,height:22,accentColor:C.success,flexShrink:0}}/>Zona profunda de hoy: {active.zonaProfunda||ZONAS_PROFUNDAS[0]}
+        </label>
+      </div>
+
+      <div style={box}>
+        <PasoHeader n={3} title="Fotos finales" done={fotosHechas===FOTOS_FINALES.length} sub={`${fotosHechas} de ${FOTOS_FINALES.length} fotos`}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {FOTOS_FINALES.map(([k,label])=><FotoSlot key={k} cleaningId={active.id} k={k} label={k==="zona"?`Zona: ${active.zonaProfunda||""}`:label} has={!!fotos[k]} thumb={thumbs[k]} showToast={showToast}/>)}
+        </div>
+      </div>
+
+      <div style={box}>
+        <PasoHeader n={4} title="Salida" done={false} sub="Escribe las novedades y toca Terminé al salir del apartamento."/>
+        <Lbl>Novedades (daños, faltantes, objetos olvidados)</Lbl>
+        <textarea value={activeNotes} onChange={e=>setActiveNotes(e.target.value)} rows={2} placeholder="Si no hay novedades, déjalo vacío" style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",marginBottom:12}}/>
+        <Btn variant="success" onClick={finishCleaning} disabled={saving} style={{width:"100%",padding:"16px",fontSize:17}}>{saving?"Guardando...":"■ Terminé"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+// Resumen del día: entradas, salidas, horas trabajadas y tiempos muertos entre apartamentos
+function DiaResumen({cleanings,employee,now}){
+  const hoy=todayStr();
+  const mine=cleanings.filter(c=>c.date===hoy&&c.employeeName===employee);
+  const timed=mine.filter(c=>c.startedAt).sort((a,b)=>a.startedAt-b.startedAt);
+  const manual=mine.filter(c=>!c.startedAt);
+  if(mine.length===0) return null;
+  let trabajado=0, muerto=0;
+  const rows=[];
+  timed.forEach((c,i)=>{
+    const fin=c.finishedAt||null;
+    const dur=((fin||now)-c.startedAt)/60000;
+    trabajado+=dur;
+    if(i>0){
+      const prev=timed[i-1];
+      if(prev.finishedAt){ const gap=(c.startedAt-prev.finishedAt)/60000; if(gap>0){ muerto+=gap; rows.push({gap,key:"g"+c.id}); } }
+    }
+    rows.push({c,dur,fin,key:c.id});
+  });
+  const first=timed[0]?.startedAt, lastFin=timed.length?(timed.at(-1).finishedAt||now):null;
+  const stat=(label,value,color)=>(<div style={{flex:1,minWidth:90,background:C.surface,borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:11,color:C.muted}}>{label}</div><div style={{fontSize:17,fontWeight:800,color:color||C.text,marginTop:2}}>{value}</div></div>);
+  return(
+    <div style={{marginBottom:20}}>
+      <div style={{color:C.muted,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:12}}>Mi día — {fmtDate(hoy)}</div>
+      {timed.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        {stat("Apartamentos",String(timed.length))}
+        {stat("Horas trabajadas",fmtMin(trabajado),C.success)}
+        {stat("Tiempo muerto",fmtMin(muerto),muerto>0?C.danger:C.muted)}
+        {stat("Jornada",first?`${toHM(first)} – ${toHM(lastFin)}`:"—")}
+      </div>}
+      {rows.map(r=>r.gap!=null?(
+        <div key={r.key} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0 4px 14px",color:C.danger,fontSize:12,fontWeight:700}}>⏸ Tiempo muerto / traslado: {fmtMin(r.gap)}</div>
+      ):(
+        <div key={r.key} style={{background:C.card,border:`1px solid ${r.fin?C.border:C.accent}`,borderRadius:10,padding:"12px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:14}}>{r.c.apartmentName}</div>
+            <div style={{fontSize:12,color:C.muted,marginTop:2}}>Entrada {toHM(r.c.startedAt)} · Salida {r.fin?toHM(r.fin):"en curso"} · 📷 {Object.keys(r.c.fotos||{}).length}</div>
+          </div>
+          <div style={{fontWeight:800,color:r.fin?C.text:C.accent,whiteSpace:"nowrap"}}>{fmtMin(r.dur)}</div>
+        </div>
+      ))}
+      {manual.map(c=>(
+        <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",marginBottom:6}}>
+          <div style={{fontWeight:700,fontSize:14}}>{c.apartmentName}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}>Registrada sin cronómetro · {c.time}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EmployeeView({appData,update,showToast,onLogout}){
-  const [employee,setEmployee]=useState("");
+  // El nombre se recuerda en este celular para no elegirlo cada vez
+  const [employee,setEmployeeRaw]=useState(()=>{ try{ return localStorage.getItem("lp_empleado")||""; }catch(e){ return ""; } });
+  const setEmployee=(v)=>{ setEmployeeRaw(v); try{ localStorage.setItem("lp_empleado",v); }catch(e){} };
+  const [now,setNow]=useState(Date.now());
+  useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),15000); return ()=>clearInterval(t); },[]);
+  const [activeNotes,setActiveNotes]=useState("");
   const [aptId,setAptId]=useState("");
   const [notes,setNotes]=useState("");
   const [date,setDate]=useState(todayStr());
@@ -216,36 +438,82 @@ function EmployeeView({appData,update,showToast,onLogout}){
   const apt=appData.apartments.find(a=>a.id===aptId);
   const todayList=appData.cleanings.filter(c=>c.date===todayStr()).sort((a,b)=>b.createdAt-a.createdAt);
   const [saving,setSaving]=useState(false);
-  const handleSubmit=()=>{
-    if(!employee||!aptId||!date){showToast("Completa todos los campos","error");return;}
-    if(!CLEANINGS_COL){showToast("Sin conexión con la base de datos","error");return;}
-    // Anti-duplicados: el mismo apartamento no se registra dos veces el mismo día.
+  // Limpieza en curso de esta persona (empezó y no ha terminado)
+  const active=employee?appData.cleanings.find(c=>c.enCurso&&c.employeeName===employee):null;
+  // Anti-duplicados: el mismo apartamento no se registra dos veces el mismo día.
+  const okToSave=(d)=>{
     const aptName=apt?.displayName||"";
-    const same=appData.cleanings.filter(c=>c.date===date&&(c.apartmentId===aptId||normTxt(c.apartmentName)===normTxt(aptName)));
+    const same=appData.cleanings.filter(c=>c.date===d&&(c.apartmentId===aptId||normTxt(c.apartmentName)===normTxt(aptName)));
     if(same.some(c=>normTxt(c.employeeName)===normTxt(employee))){
-      showToast(`${aptName} ya está registrado por ti el ${fmtDate(date)}. No se guardó de nuevo.`,"error");return;
+      showToast(`${aptName} ya está registrado por ti el ${fmtDate(d)}. No se guardó de nuevo.`,"error");return false;
     }
-    if(same.length>0 && !window.confirm(`${aptName} ya fue registrado el ${fmtDate(date)} por ${same.map(c=>c.employeeName||"otra persona").join(", ")}.\n\nSi lo hicieron juntas, NO lo registres otra vez: ya cuenta una vez.\n\n¿Registrarlo de todas formas?`)) return;
-    const newC={date,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes,paid:false,amount:apt?.price||0,createdAt:Date.now()};
+    if(same.length>0 && !window.confirm(`${aptName} ya fue registrado el ${fmtDate(d)} por ${same.map(c=>c.employeeName||"otra persona").join(", ")}.\n\nSi lo hicieron juntas, NO lo registres otra vez: ya cuenta una vez.\n\n¿Registrarlo de todas formas?`)) return false;
+    return true;
+  };
+  const saveNew=(d,newC,okMsg)=>{
     setSaving(true);
-    // Cada limpieza tiene un ID fijo (fecha + apartamento + encargado). Si dos
-    // dispositivos o un doble toque intentan guardar la misma, la transacción
-    // detecta que ya existe y no la duplica. Personas distintas no se pisan.
-    const ref=CLEANINGS_COL.doc(`${date}_${aptId}_${employee}`.replace(/[\/\s]+/g,"-"));
-    db.runTransaction(async t=>{
+    const ref=CLEANINGS_COL.doc(`${d}_${aptId}_${employee}`.replace(/[\/\s]+/g,"-"));
+    return db.runTransaction(async t=>{
       const s=await t.get(ref);
       if(s.exists) throw new Error("DUPLICADO");
       t.set(ref,newC);
     })
-      .then(()=>{
-        showToast("¡Limpieza registrada! ✅");
-        setAptId("");setNotes("");setSelectedBuilding("");
-      })
+      .then(()=>{ showToast(okMsg); setAptId("");setNotes("");setSelectedBuilding(""); })
       .catch(e=>{
         if(e&&e.message==="DUPLICADO"){ showToast("Esta limpieza ya estaba registrada, no se duplicó","error"); return; }
         console.error("Error guardando limpieza:",e); showToast("No se pudo guardar, revisa tu conexión e intenta de nuevo","error");
       })
       .finally(()=>setSaving(false));
+  };
+  // ▶ Empezar: guarda hora y ubicación de llegada
+  const startCleaning=async()=>{
+    if(!employee||!aptId){showToast("Elige tu nombre y el apartamento","error");return;}
+    if(!CLEANINGS_COL){showToast("Sin conexión con la base de datos","error");return;}
+    if(active){showToast(`Primero termina ${active.apartmentName}`,"error");return;}
+    const d=todayStr();
+    if(!okToSave(d)) return;
+    setSaving(true);
+    const loc=await getPos();
+    const ts=Date.now();
+    const prevTimed=appData.cleanings.filter(c=>c.apartmentId===aptId&&c.startedAt).length;
+    const tipo=apt?.tipo||"";
+    const newC={date:d,time:new Date(ts).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes:"",paid:false,amount:apt?.price||0,createdAt:ts,
+      enCurso:true,startedAt:ts,startLoc:loc,tipo,zonaProfunda:ZONAS_PROFUNDAS.at(prevTimed%ZONAS_PROFUNDAS.length),checklist:{}};
+    setActiveNotes("");
+    saveNew(d,newC,loc?"▶ Limpieza iniciada ✅":"▶ Limpieza iniciada (sin ubicación)");
+  };
+  const toggleCheck=(key)=>{
+    if(!active) return;
+    const cl={...(active.checklist||{}),[key]:!(active.checklist||{})[key]};
+    CLEANINGS_COL.doc(active.id).update({checklist:cl}).catch(e=>{console.error(e);showToast("No se pudo guardar el check","error");});
+  };
+  // ■ Terminar: guarda hora y ubicación de salida y la duración
+  const finishCleaning=async()=>{
+    if(!active) return;
+    const items=checklistFor(active.tipo);
+    const total=items.length+1;
+    const done=items.filter((_,i)=>(active.checklist||{})["i"+i]).length+((active.checklist||{}).zona?1:0);
+    const faltanFotos=[["entrada","Foto de entrada"],...FOTOS_FINALES].filter(([k])=>!(active.fotos||{})[k]).map(([,l])=>l);
+    const faltas=[];
+    if(done<total) faltas.push(`${total-done} tareas del checklist`);
+    if(faltanFotos.length) faltas.push(`fotos: ${faltanFotos.join(", ")}`);
+    if(faltas.length && !window.confirm(`Te falta:\n• ${faltas.join("\n• ")}\n\n¿Terminar de todas formas?`)) return;
+    setSaving(true);
+    const loc=await getPos();
+    const fin=Date.now();
+    CLEANINGS_COL.doc(active.id).update({enCurso:false,finishedAt:fin,endLoc:loc,durationMin:Math.round((fin-active.startedAt)/60000),notes:activeNotes.trim()||active.notes||""})
+      .then(()=>{ showToast(`■ Terminado: ${fmtMin((fin-active.startedAt)/60000)} ✅`); setActiveNotes(""); })
+      .catch(e=>{console.error(e);showToast("No se pudo terminar, revisa tu conexión","error");})
+      .finally(()=>setSaving(false));
+  };
+  // Registro sin cronómetro (como antes), para limpiezas ya hechas
+  const handleSubmit=()=>{
+    if(!employee||!aptId||!date){showToast("Completa todos los campos","error");return;}
+    if(!CLEANINGS_COL){showToast("Sin conexión con la base de datos","error");return;}
+    if(!okToSave(date)) return;
+    const newC={date,time:new Date().toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),employeeName:employee,apartmentId:aptId,apartmentName:apt?.displayName||"",clientName:apt?.clientName||"",notes,paid:false,amount:apt?.price||0,createdAt:Date.now()};
+    // ID fijo (fecha + apartamento + encargado): un doble toque o dos celulares no duplican.
+    saveNew(date,newC,"¡Limpieza registrada! ✅");
   };
   return(
     <div style={{minHeight:"100vh",maxWidth:480,margin:"0 auto",padding:"20px 16px"}}>
@@ -253,7 +521,8 @@ function EmployeeView({appData,update,showToast,onLogout}){
         <div><h2 style={{margin:0,fontSize:22,fontWeight:800}}>🧹 Nueva limpieza</h2><p style={{margin:"2px 0 0",color:C.muted,fontSize:13}}>{fmtDate(todayStr())}</p></div>
         <Btn variant="ghost" size="sm" onClick={onLogout}>Salir</Btn>
       </div>
-      <Card style={{marginBottom:20}}>
+      {active&&<ActiveCleaning active={active} now={now} saving={saving} activeNotes={activeNotes} setActiveNotes={setActiveNotes} toggleCheck={toggleCheck} finishCleaning={finishCleaning} showToast={showToast}/>}
+      {!active&&<Card style={{marginBottom:20}}>
         <div style={{marginBottom:14}}><Lbl>Tu nombre *</Lbl>
           <Sel value={employee} onChange={setEmployee}><option value="">-- Selecciona --</option>{appData.employees.map(e=><option key={e} value={e}>{e}</option>)}</Sel>
         </div>
@@ -282,9 +551,20 @@ function EmployeeView({appData,update,showToast,onLogout}){
         <div style={{marginBottom:20}}><Lbl>Observaciones (opcional)</Lbl>
           <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Estado del apartamento, novedades..." rows={3} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
         </div>
-        <Btn onClick={handleSubmit} disabled={saving} style={{width:"100%",padding:"14px",fontSize:15}}>{saving?"Guardando...":"✓ Registrar limpieza"}</Btn>
-      </Card>
-      <div style={{marginBottom:20}}>
+        <Btn onClick={startCleaning} disabled={saving} style={{width:"100%",padding:"14px",fontSize:16}}>{saving?"Guardando...":"▶ Empezar limpieza"}</Btn>
+        <div style={{fontSize:11,color:C.muted,textAlign:"center",margin:"8px 0 14px"}}>Toca Empezar al llegar al apartamento y Terminé al salir. Se guarda la hora y la ubicación.</div>
+        <details>
+          <summary style={{cursor:"pointer",color:C.muted,fontSize:13,fontWeight:600}}>Registrar una limpieza ya hecha (sin cronómetro)</summary>
+          <div style={{marginTop:12}}>
+            <div style={{marginBottom:14}}><Lbl>Fecha *</Lbl><Inp type="date" value={date} onChange={setDate}/></div>
+            <div style={{marginBottom:14}}><Lbl>Observaciones (opcional)</Lbl>
+              <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Estado del apartamento, novedades..." rows={2} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+            </div>
+            <Btn variant="ghost" onClick={handleSubmit} disabled={saving} style={{width:"100%"}}>{saving?"Guardando...":"✓ Registrar sin cronómetro"}</Btn>
+          </div>
+        </details>
+      </Card>}
+      {!active&&<div style={{marginBottom:20}}>
         <button onClick={()=>setShowNewApt(!showNewApt)} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.border}`,borderRadius:10,color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>
           {showNewApt?"✕ Cancelar":"➕ Agregar apartamento nuevo"}
         </button>
@@ -298,19 +578,8 @@ function EmployeeView({appData,update,showToast,onLogout}){
             <Btn onClick={handleAddApt} style={{width:"100%"}}>+ Agregar</Btn>
           </Card>
         )}
-      </div>
-      {todayList.length>0&&(
-        <div>
-          <div style={{color:C.muted,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:12}}>Mis registros de hoy — {todayList.length}</div>
-          {todayList.map(c=>(
-            <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px",marginBottom:10}}>
-              <div style={{fontWeight:700,fontSize:14}}>{c.apartmentName}</div>
-              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{c.clientName} · {c.employeeName} · {c.time}</div>
-              {c.notes&&<div style={{fontSize:12,color:C.muted,marginTop:2,fontStyle:"italic"}}>"{c.notes}"</div>}
-            </div>
-          ))}
-        </div>
-      )}
+      </div>}
+      {employee&&<DiaResumen cleanings={appData.cleanings} employee={employee} now={now}/>}
 
       {/* Historial de limpiezas por fecha */}
       <CleaningHistoryEmployee cleanings={appData.cleanings}/>
@@ -479,7 +748,7 @@ function CleaningHistoryEmployee({cleanings}){
 }
 
 function AdminView({appData,update,showToast,onLogout,tab,setTab}){
-  const tabs=[["dashboard","📊 Resumen"],["cleanings","🧹 Registros"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
+  const tabs=[["dashboard","📊 Resumen"],["cleanings","🧹 Registros"],["tiempos","⏱ Tiempos"],["clients","🏠 Clientes"],["config","⚙️ Config"]];
   return(
     <div style={{minHeight:"100vh"}}>
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`}}>
@@ -502,6 +771,7 @@ function AdminView({appData,update,showToast,onLogout,tab,setTab}){
       <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 20px"}}>
         {tab==="dashboard"&&<DashboardTab appData={appData}/>}
         {tab==="cleanings"&&<CleaningsTab appData={appData} update={update} showToast={showToast}/>}
+        {tab==="tiempos"  &&<TiemposTab   appData={appData}/>}
         {tab==="clients"  &&<ClientsTab   appData={appData} update={update} showToast={showToast}/>}
         {tab==="config"   &&<ConfigTab    appData={appData} update={update} showToast={showToast}/>}
       </div>
@@ -623,8 +893,49 @@ function DashboardTab({appData}){
   );
 }
 
+// Visor de fotos de una limpieza (admin)
+function FotosModal({cleaning,onClose}){
+  const [fotos,setFotos]=useState(null);
+  useEffect(()=>{
+    CLEANINGS_COL.doc(cleaning.id).collection("fotos").get()
+      .then(s=>{const order=["entrada",...FOTOS_FINALES.map(([k])=>k)];const arr=[];s.forEach(d=>arr.push({id:d.id,...d.data()}));arr.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));setFotos(arr);})
+      .catch(e=>{console.error(e);setFotos([]);});
+  },[cleaning.id]);
+  const d=durMin(cleaning);
+  return(
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20,width:"100%",maxWidth:820,maxHeight:"92vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:10}}>
+          <div>
+            <h3 style={{margin:0,fontSize:17,fontWeight:800}}>{cleaning.apartmentName} · {fmtDate(cleaning.date)}</h3>
+            <div style={{fontSize:12,color:C.muted,marginTop:4}}>{cleaning.employeeName} · Entrada {toHM(cleaning.startedAt)||"—"} · Salida {toHM(cleaning.finishedAt)||"—"} · {d!=null?fmtMin(d):"sin tiempo"}{cleaning.notes?` · ${cleaning.notes}`:""}</div>
+          </div>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:20,fontFamily:"inherit"}}>✕</button>
+        </div>
+        {fotos===null?<div style={{color:C.muted,padding:30,textAlign:"center"}}>Cargando fotos...</div>
+        :fotos.length===0?<div style={{color:C.muted,padding:30,textAlign:"center"}}>Sin fotos</div>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+          {fotos.map(f=>(<div key={f.id}><img src={f.data} alt={f.label} style={{width:"100%",borderRadius:8,display:"block"}}/><div style={{fontSize:12,color:C.muted,marginTop:4}}>{f.label} · {toHM(f.ts)}</div></div>))}
+        </div>}
+      </div>
+    </div>
+  );
+}
+
 function EditModal({cleaning,appData,onSave,onClose}){
   const [form,setForm]=useState({...cleaning});
+  // Horas de entrada y salida (para cargar las que vienen de los videos de WhatsApp)
+  const [tIni,setTIni]=useState(toHM(cleaning.startedAt));
+  const [tFin,setTFin]=useState(toHM(cleaning.finishedAt));
+  const doSave=()=>{
+    const f={...form};
+    const ts=(hm)=>hm?new Date(`${f.date}T${hm}:00`).getTime():null;
+    const s=ts(tIni), e=ts(tFin);
+    if(s&&e&&e<=s){ window.alert("La hora de salida debe ser después de la de entrada"); return; }
+    f.startedAt=s; f.finishedAt=e; f.durationMin=(s&&e)?Math.round((e-s)/60000):null;
+    if(s&&e) f.enCurso=false;
+    onSave(f);
+  };
   const sorted=[...appData.apartments].sort((a,b)=>a.displayName.localeCompare(b.displayName));
   const buildingGroups=[...new Set(sorted.map(a=>a.building))];
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
@@ -654,6 +965,11 @@ function EditModal({cleaning,appData,onSave,onClose}){
         </div>
         <div style={{marginBottom:14}}><Lbl>Cliente</Lbl><Inp value={form.clientName||""} onChange={v=>set("clientName",v)} placeholder="Cliente"/></div>
         <div style={{marginBottom:14}}><Lbl>Valor (COP)</Lbl><Inp type="number" value={form.amount||""} onChange={v=>set("amount",parseInt(v)||0)} placeholder="50000"/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:6}}>
+          <div><Lbl>Hora de entrada</Lbl><Inp type="time" value={tIni} onChange={setTIni}/></div>
+          <div><Lbl>Hora de salida</Lbl><Inp type="time" value={tFin} onChange={setTFin}/></div>
+        </div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:14}}>{tIni&&tFin&&tFin>tIni?`Duración: ${fmtMin((new Date(`2000-01-01T${tFin}:00`)-new Date(`2000-01-01T${tIni}:00`))/60000)}`:"Opcional: sirve para medir tiempos"}</div>
         <div style={{marginBottom:14}}><Lbl>Observaciones</Lbl>
           <textarea value={form.notes||""} onChange={e=>set("notes",e.target.value)} rows={3} style={{width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
         </div>
@@ -666,7 +982,7 @@ function EditModal({cleaning,appData,onSave,onClose}){
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn variant="ghost" onClick={onClose} style={{flex:1}}>Cancelar</Btn>
-          <Btn onClick={()=>onSave(form)} style={{flex:1}}>💾 Guardar</Btn>
+          <Btn onClick={doSave} style={{flex:1}}>💾 Guardar</Btn>
         </div>
       </div>
     </div>
@@ -680,6 +996,7 @@ function CleaningsTab({appData,update,showToast}){
   const [fClient,setFClient]=useState("");
   const [fPaid,setFPaid]=useState("all");
   const [editing,setEditing]=useState(null);
+  const [viewing,setViewing]=useState(null);
   const filtered=appData.cleanings.filter(c=>{
     if(fDate&&c.date!==fDate) return false;
     if(fEmp&&!c.employeeName?.toLowerCase().includes(fEmp.toLowerCase())) return false;
@@ -731,6 +1048,7 @@ function CleaningsTab({appData,update,showToast}){
   return(
     <div>
       {editing&&<EditModal cleaning={editing} appData={appData} onSave={saveEdit} onClose={()=>setEditing(null)}/>}
+      {viewing&&<FotosModal cleaning={viewing} onClose={()=>setViewing(null)}/>}
       <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Todos los registros</h2>
       {(autoDups.length>0||pairs.length>0||(appData.duplicates||[]).length>0)&&(
         <Card style={{marginBottom:20,border:`1px solid ${autoDups.length>0?C.danger:C.border}`}}>
@@ -794,10 +1112,11 @@ function CleaningsTab({appData,update,showToast}){
                   <td style={{padding:"12px 16px",fontWeight:700}}>{c.employeeName}</td>
                   <td style={{padding:"12px 16px"}}>{c.apartmentName}</td>
                   <td style={{padding:"12px 16px",color:C.info,fontWeight:600}}>{c.clientName||"—"}</td>
-                  <td style={{padding:"12px 16px",color:C.muted,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes||"—"}</td>
+                  <td style={{padding:"12px 16px",color:C.muted,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.enCurso?<span style={{color:C.accent,fontWeight:700}}>⏱ en curso · </span>:durMin(c)!=null?<span style={{color:C.info,fontWeight:700}}>⏱ {fmtMin(durMin(c))} · </span>:null}{c.notes||"—"}</td>
                   <td style={{padding:"12px 16px",color:C.accent,fontWeight:800,whiteSpace:"nowrap"}}>{fmtCOP(c.amount)}</td>
                   <td style={{padding:"12px 16px"}}><Badge paid={c.paid}/></td>
                   <td style={{padding:"12px 16px"}}><div style={{display:"flex",gap:6}}>
+                    {Object.keys(c.fotos||{}).length>0&&<Btn variant="ghost" size="sm" onClick={()=>setViewing(c)}>📷 {Object.keys(c.fotos).length}</Btn>}
                     <Btn variant="info" size="sm" onClick={()=>setEditing(c)}>✏️</Btn>
                     <Btn variant={c.paid?"ghost":"success"} size="sm" onClick={()=>togglePaid(c.id)}>{c.paid?"↩":"✓"}</Btn>
                     <Btn variant="danger" size="sm" onClick={()=>del(c.id)}>✕</Btn>
@@ -895,6 +1214,166 @@ function ClientsTab({appData,update,showToast}){
   );
 }
 
+// ⏱ Tiempos y ganancia: por apartamento, por aseadora y por jornada (con tiempos muertos)
+function TiemposTab({appData}){
+  const k=getCosts(appData.settings);
+  const clients=[...new Set(appData.apartments.map(a=>a.clientName).filter(Boolean))].sort();
+  const [fClient,setFClient]=useState(clients.includes("TCG")?"TCG":"");
+  const [desde,setDesde]=useState(daysAgoStr(60));
+  const [hasta,setHasta]=useState(todayStr());
+  const inRange=c=>c.date>=desde&&c.date<=hasta&&(!fClient||c.clientName===fClient);
+  const enRango=appData.cleanings.filter(inRange);
+  // Menos de 5 min o más de 8 h se toma como error de registro y no cuenta
+  const timed=enRango.filter(c=>{const d=durMin(c);return d!=null&&d>=5&&d<=480;});
+  const enCurso=appData.cleanings.filter(c=>c.enCurso);
+  const aptOf=(c)=>appData.apartments.find(a=>a.id===c.apartmentId)||appData.apartments.find(a=>normTxt(a.displayName)===normTxt(c.apartmentName));
+  // Por apartamento
+  const apts=appData.apartments.filter(a=>!fClient||a.clientName===fClient);
+  const aptRows=apts.map(a=>{
+    const ts=timed.filter(c=>aptOf(c)?.id===a.id).map(durMin);
+    const n=ts.length, avg=n?ts.reduce((s,x)=>s+x,0)/n:null;
+    const e=econ(a.price,avg,juegosOf(a),k);
+    return {a,n,avg,min:n?Math.min(...ts):null,max:n?Math.max(...ts):null,e,servicios:enRango.filter(c=>aptOf(c)?.id===a.id).length};
+  }).filter(r=>r.servicios>0||r.n>0).sort((x,y)=>(y.n-x.n)||x.a.displayName.localeCompare(y.a.displayName));
+  // Jornadas: aseadora + día, con tiempos muertos entre un apartamento y el siguiente
+  const days={};
+  timed.forEach(c=>{const key=c.date+"|"+(c.employeeName||"-");(days[key]=days[key]||[]).push(c);});
+  const jornadas=Object.entries(days).map(([key,list])=>{
+    const l=[...list].sort((a,b)=>a.startedAt-b.startedAt);
+    let trabajado=0,muerto=0;
+    l.forEach((c,i)=>{trabajado+=durMin(c);if(i>0){const g=(c.startedAt-l[i-1].finishedAt)/60000;if(g>0&&g<240)muerto+=g;}});
+    return {date:l[0].date,emp:l[0].employeeName||"—",n:l.length,ini:l[0].startedAt,fin:l.at(-1).finishedAt,trabajado,muerto};
+  }).sort((a,b)=>b.date.localeCompare(a.date)||a.emp.localeCompare(b.emp));
+  // Por aseadora
+  const emps={};
+  jornadas.forEach(j=>{const e=emps[j.emp]||(emps[j.emp]={emp:j.emp,dias:0,n:0,trabajado:0,muerto:0});e.dias++;e.n+=j.n;e.trabajado+=j.trabajado;e.muerto+=j.muerto;});
+  const empRows=Object.values(emps).sort((a,b)=>b.n-a.n);
+  // Resumen
+  const totTrab=jornadas.reduce((s,j)=>s+j.trabajado,0), totMuerto=jornadas.reduce((s,j)=>s+j.muerto,0);
+  const medidosConPrecio=aptRows.filter(r=>r.n>0);
+  const gananciaProm=(f)=>{const n=medidosConPrecio.reduce((s,r)=>s+r.n,0);return n?medidosConPrecio.reduce((s,r)=>s+r.e[f]*r.n,0)/n:null;};
+  const gHoy=gananciaProm("gHoy"), gAiu=gananciaProm("gAiu");
+  const money=(v)=>v==null?"—":<span style={{color:v>=0?C.success:C.danger,fontWeight:800}}>{v<0?"–":""}{fmtCOP(Math.abs(Math.round(v)))}</span>;
+  const th={textAlign:"left",padding:"10px 12px",color:C.muted,fontWeight:700,whiteSpace:"nowrap",fontSize:12};
+  const td={padding:"10px 12px",whiteSpace:"nowrap"};
+  const kpi=(label,value,sub,color)=>(<Card style={{padding:16}}><div style={{fontSize:12,color:C.muted}}>{label}</div><div style={{fontSize:20,fontWeight:800,color:color||C.text,marginTop:4}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>{sub}</div>}</Card>);
+  return(
+    <div>
+      <h2 style={{margin:"0 0 6px",fontSize:22,fontWeight:800}}>Tiempos y ganancia</h2>
+      <div style={{color:C.muted,fontSize:13,marginBottom:18}}>Solo cuentan las limpiezas con hora de entrada y salida (cronómetro o cargadas a mano en ✏️). Costos en Config → Costos.</div>
+      <Card style={{marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+          <div><Lbl>Cliente</Lbl><Sel value={fClient} onChange={setFClient}><option value="">Todos</option>{clients.map(c=><option key={c} value={c}>{c}</option>)}</Sel></div>
+          <div><Lbl>Desde</Lbl><Inp type="date" value={desde} onChange={setDesde}/></div>
+          <div><Lbl>Hasta</Lbl><Inp type="date" value={hasta} onChange={setHasta}/></div>
+        </div>
+      </Card>
+      {enCurso.length>0&&<Card style={{marginBottom:16,border:`1px solid ${C.accent}`}}>
+        <div style={{fontWeight:800,marginBottom:8}}>⏱ En curso ahora ({enCurso.length})</div>
+        {enCurso.map(c=><div key={c.id} style={{fontSize:13,color:C.muted,padding:"3px 0"}}>{c.apartmentName} · {c.employeeName} · entró {toHM(c.startedAt)} ({fmtDate(c.date)})</div>)}
+      </Card>}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:20}}>
+        {kpi("Servicios medidos",`${timed.length} de ${enRango.length}`,enRango.length?`${Math.round(timed.length/enRango.length*100)}% con hora de entrada y salida`:"")}
+        {kpi("Tiempo promedio",timed.length?fmtMin(timed.reduce((s,c)=>s+durMin(c),0)/timed.length):"—","por apartamento")}
+        {kpi("Horas trabajadas",fmtMin(totTrab),"dentro de los apartamentos",C.success)}
+        {kpi("Tiempo muerto",fmtMin(totMuerto),totTrab?`${Math.round(totMuerto/(totTrab+totMuerto)*100)}% de la jornada`:"entre apartamentos",totMuerto?C.danger:C.muted)}
+        {kpi("Ganancia por servicio hoy",money(gHoy),"IVA del 19% sobre todo")}
+        {kpi("Ganancia por servicio con AIU",money(gAiu),`IVA solo sobre el AIU (${k.aiuPct}%)`)}
+      </div>
+
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Por apartamento</h3>
+      <Card style={{padding:0,overflow:"hidden",marginBottom:24}}><div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface}}>{["Apartamento","Tipo","Medidos","Tiempo promedio","Mín – máx","Precio","Ganancia hoy","Ganancia con AIU","Máximo para no perder (hoy / AIU)"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {aptRows.length===0?<tr><td colSpan={9} style={{...td,textAlign:"center",color:C.muted,padding:30}}>Sin datos en este rango</td></tr>
+            :aptRows.map(r=>(
+              <tr key={r.a.id} style={{borderTop:`1px solid ${C.border}`}}>
+                <td style={{...td,fontWeight:700}}>{r.a.displayName}</td>
+                <td style={{...td,color:r.a.tipo?C.text:C.danger}}>{APT_TYPES[r.a.tipo]||"Sin tipo"}</td>
+                <td style={td}>{r.n} de {r.servicios}</td>
+                <td style={{...td,fontWeight:800,color:C.info}}>{fmtMin(r.avg)}</td>
+                <td style={{...td,color:C.muted}}>{r.n?`${fmtMin(r.min)} – ${fmtMin(r.max)}`:"—"}</td>
+                <td style={td}>{fmtCOP(r.a.price||0)}</td>
+                <td style={td}>{money(r.e.gHoy)}</td>
+                <td style={td}>{money(r.e.gAiu)}</td>
+                <td style={{...td,color:C.muted}}>{fmtMin(r.e.maxHoy)} / {fmtMin(r.e.maxAiu)}</td>
+              </tr>))}
+          </tbody>
+        </table>
+      </div></Card>
+
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Por aseadora</h3>
+      <Card style={{padding:0,overflow:"hidden",marginBottom:24}}><div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface}}>{["Aseadora","Días","Apartamentos","Por día","Tiempo promedio","Horas trabajadas","Tiempo muerto","Muerto por día"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {empRows.length===0?<tr><td colSpan={8} style={{...td,textAlign:"center",color:C.muted,padding:30}}>Sin datos en este rango</td></tr>
+            :empRows.map(e=>(
+              <tr key={e.emp} style={{borderTop:`1px solid ${C.border}`}}>
+                <td style={{...td,fontWeight:700}}>{e.emp}</td>
+                <td style={td}>{e.dias}</td>
+                <td style={td}>{e.n}</td>
+                <td style={td}>{(e.n/e.dias).toFixed(1)}</td>
+                <td style={{...td,fontWeight:800,color:C.info}}>{fmtMin(e.trabajado/e.n)}</td>
+                <td style={{...td,color:C.success,fontWeight:700}}>{fmtMin(e.trabajado)}</td>
+                <td style={{...td,color:e.muerto?C.danger:C.muted,fontWeight:700}}>{fmtMin(e.muerto)}</td>
+                <td style={{...td,color:C.muted}}>{fmtMin(e.muerto/e.dias)}</td>
+              </tr>))}
+          </tbody>
+        </table>
+      </div></Card>
+
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 10px"}}>Jornadas</h3>
+      <Card style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr style={{background:C.surface,position:"sticky",top:0}}>{["Fecha","Aseadora","Apartamentos","Primera entrada","Última salida","Horas trabajadas","Tiempo muerto"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {jornadas.length===0?<tr><td colSpan={7} style={{...td,textAlign:"center",color:C.muted,padding:30}}>Todavía no hay limpiezas con cronómetro</td></tr>
+            :jornadas.map(j=>(
+              <tr key={j.date+j.emp} style={{borderTop:`1px solid ${C.border}`}}>
+                <td style={{...td,color:C.muted}}>{fmtDate(j.date)}</td>
+                <td style={{...td,fontWeight:700}}>{j.emp}</td>
+                <td style={td}>{j.n}</td>
+                <td style={td}>{toHM(j.ini)}</td>
+                <td style={td}>{toHM(j.fin)}</td>
+                <td style={{...td,color:C.success,fontWeight:700}}>{fmtMin(j.trabajado)}</td>
+                <td style={{...td,color:j.muerto?C.danger:C.muted,fontWeight:700}}>{fmtMin(j.muerto)}</td>
+              </tr>))}
+          </tbody>
+        </table>
+      </div></Card>
+    </div>
+  );
+}
+
+function CostosSection({appData,update,showToast}){
+  const k0=getCosts(appData.settings);
+  const [k,setK]=useState(k0);
+  const fields=[
+    ["costoHora","Costo de una hora productiva de aseadora","Salario + prestaciones + recargos, dividido por las horas que de verdad se trabajan"],
+    ["lenceriaJuego","Costo de lavar un juego de lencería","Insumos, servicios, operaria de la lavandería y desgaste"],
+    ["insumos","Productos, equipos y daños por servicio",""],
+    ["admin","Coordinación y administración por servicio",""],
+    ["aiuPct","AIU (% del valor sin IVA)","Mínimo 10%"],
+    ["ivaPct","IVA (%)",""],
+  ];
+  const save=()=>{ const c={...k}; fields.forEach(([f])=>{c[f]=Number(c[f])||0;}); update("settings",{...appData.settings,costs:c}); showToast("Costos guardados ✅"); };
+  return(
+    <Card style={{maxWidth:560}}>
+      <h3 style={{margin:"0 0 6px",fontSize:15,fontWeight:700}}>Parámetros de costo</h3>
+      <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Con estos valores la pestaña Tiempos calcula cuánto gana o pierde cada apartamento.</div>
+      {fields.map(([f,l,h])=>(
+        <div key={f} style={{marginBottom:12}}><Lbl>{l}</Lbl><Inp type="number" value={k[f]} onChange={v=>setK(p=>({...p,[f]:v}))}/>{h&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>{h}</div>}</div>
+      ))}
+      <label style={{display:"flex",gap:10,alignItems:"center",fontSize:13,margin:"6px 0 16px",cursor:"pointer"}}>
+        <input type="checkbox" checked={!!k.preciosConIva} onChange={e=>setK(p=>({...p,preciosConIva:e.target.checked}))} style={{width:18,height:18}}/>Los precios de los apartamentos incluyen IVA
+      </label>
+      <Btn onClick={save} style={{width:"100%"}}>Guardar costos</Btn>
+    </Card>
+  );
+}
+
 function ConfigTab({appData,update,showToast}){
   const [sec,setSec]=useState("apartments");
   const [nAptNum,setNAptNum]=useState("");
@@ -970,7 +1449,7 @@ function ConfigTab({appData,update,showToast}){
     <div>
       <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Configuración</h2>
       <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-        {[["apartments","🏠 Apartamentos"],["employees","👤 Encargados"],["passwords","🔐 Contraseñas"],["backup","💾 Backup"]].map(([id,label])=>(
+        {[["apartments","🏠 Apartamentos"],["costos","💲 Costos"],["employees","👤 Encargados"],["passwords","🔐 Contraseñas"],["backup","💾 Backup"]].map(([id,label])=>(
           <Btn key={id} variant={sec===id?"primary":"ghost"} onClick={()=>setSec(id)}>{label}</Btn>
         ))}
       </div>
@@ -995,7 +1474,7 @@ function ConfigTab({appData,update,showToast}){
           <Card style={{padding:0,overflow:"hidden"}}>
             <div style={{maxHeight:460,overflowY:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{background:C.surface,position:"sticky",top:0}}>{["Apartamento","Edificio","Cliente","Precio",""].map((h,i)=><th key={i} style={{textAlign:"left",padding:"12px 16px",color:C.muted,fontWeight:700}}>{h}</th>)}</tr></thead>
+                <thead><tr style={{background:C.surface,position:"sticky",top:0}}>{["Apartamento","Edificio","Cliente","Precio","Tipo","Juegos lencería",""].map((h,i)=><th key={i} style={{textAlign:"left",padding:"12px 16px",color:C.muted,fontWeight:700}}>{h}</th>)}</tr></thead>
                 <tbody>
                   {filteredApts.map(a=>(
                     <tr key={a.id} style={{borderTop:`1px solid ${C.border}`}}>
@@ -1003,6 +1482,8 @@ function ConfigTab({appData,update,showToast}){
                       <td style={{padding:"10px 16px"}}><input value={a.building||""} onChange={e=>updLocalApt(a.id,"building",e.target.value)} style={{width:110,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/></td>
                       <td style={{padding:"10px 16px"}}><input value={a.clientName||""} onChange={e=>updLocalApt(a.id,"clientName",e.target.value)} style={{width:100,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.info,fontSize:12,fontFamily:"inherit",outline:"none",fontWeight:600}}/></td>
                       <td style={{padding:"10px 16px"}}><input type="number" value={a.price} onChange={e=>updLocalApt(a.id,"price",e.target.value)} style={{width:90,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.accent,fontSize:12,fontWeight:800,fontFamily:"inherit",outline:"none"}}/></td>
+                      <td style={{padding:"10px 16px"}}><select value={a.tipo||""} onChange={e=>updLocalApt(a.id,"tipo",e.target.value)} style={{padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:a.tipo?C.text:C.danger,fontSize:12,fontFamily:"inherit",outline:"none"}}><option value="">Sin tipo</option>{Object.entries(APT_TYPES).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></td>
+                      <td style={{padding:"10px 16px"}}><input type="number" step="0.5" min="0" value={a.juegos??""} placeholder={String(DEFAULT_JUEGOS[a.tipo]??1)} onChange={e=>updLocalApt(a.id,"juegos",e.target.value)} style={{width:60,padding:"5px 8px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/></td>
                       <td style={{padding:"10px 16px",textAlign:"right"}}><Btn variant="danger" size="sm" onClick={()=>delApt(a.id)}>✕</Btn></td>
                     </tr>
                   ))}
@@ -1037,6 +1518,7 @@ function ConfigTab({appData,update,showToast}){
         </Card>
       )}
       {sec==="backup"&&<BackupSection appData={appData} update={update} showToast={showToast}/>}
+      {sec==="costos"&&<CostosSection appData={appData} update={update} showToast={showToast}/>}
     </div>
   );
 }
