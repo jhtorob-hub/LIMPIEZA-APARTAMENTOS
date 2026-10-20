@@ -240,6 +240,15 @@ function Card({children,style:ex={}}){return <div style={{background:C.card,bord
 function Lbl({children}){return <div style={{fontSize:"12px",fontWeight:"600",color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:"6px"}}>{children}</div>;}
 function Badge({paid}){return <span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:paid?"#14532d":"#450a0a",color:paid?C.success:C.danger}}>{paid?"✓ Pagado":"Pendiente"}</span>;}
 
+// 🔒 Sesión guardada en el celular: quien entra con su clave sigue adentro aunque cierre la app,
+// la saque de la memoria o se apague el teléfono. Solo sale con "Salir", o si el admin le cambia
+// o restaura la clave (la huella guardada deja de coincidir). Se guarda una huella, nunca la clave.
+const SESION_KEY = "lp_sesion";
+const huella = (txt) => { let h=5381; const t="lp|"+String(txt||""); for(let i=0;i<t.length;i++) h=((h<<5)+h+t.charCodeAt(i))>>>0; return h.toString(36); };
+const leerSesion = () => { try{ const x=JSON.parse(localStorage.getItem(SESION_KEY)||"null"); return x&&x.v?x:null; }catch(e){ return null; } };
+const guardarSesion = (x) => { try{ localStorage.setItem(SESION_KEY, JSON.stringify({...x,t:Date.now()})); }catch(e){} };
+const borrarSesion = () => { try{ localStorage.removeItem(SESION_KEY); }catch(e){} };
+
 // 📲 Instalar en el celular: APK directo en Android, "Agregar a inicio" en iPhone
 const APK_URL = "/descargas/limpieza-pro.apk";
 function InstalarApp(){
@@ -393,6 +402,16 @@ function VideoPaso({cleaningId,k,label,video,showToast,autoStart,onDone}){
   const stopStream=()=>{ try{ streamRef.current&&streamRef.current.getTracks().forEach(t=>t.stop()); }catch(e){} streamRef.current=null; };
   useEffect(()=>()=>{ stopStream(); clearInterval(timerRef.current); },[]);
   useEffect(()=>{ if(mode==="recording"&&liveRef.current&&streamRef.current){ liveRef.current.srcObject=streamRef.current; liveRef.current.play().catch(()=>{}); } },[mode]);
+  // Mientras graba, la pantalla no se apaga (si se apaga, el celular puede cortar la grabación)
+  useEffect(()=>{
+    if(mode!=="recording"||!("wakeLock" in navigator)) return;
+    let lock=null, vivo=true;
+    const pedir=()=>navigator.wakeLock.request("screen").then(l=>{ if(vivo) lock=l; else l.release(); }).catch(()=>{});
+    pedir();
+    const alVolver=()=>{ if(document.visibilityState==="visible") pedir(); };
+    document.addEventListener("visibilitychange",alVolver);
+    return ()=>{ vivo=false; document.removeEventListener("visibilitychange",alVolver); if(lock) lock.release().catch(()=>{}); };
+  },[mode]);
   const upload=()=>{
     const v=blobRef.current; if(!v) return;
     if(!STORAGE){ setMode("error"); showToast("El almacenamiento de videos no está activo","error"); return; }
@@ -676,9 +695,19 @@ const resumenDia = (cleanings, employee, now) => {
 };
 
 function EmployeeView({appData,update,showToast,onLogout}){
-  // Cada vez que se abre la app hay que elegir el nombre y poner la clave de esa persona
-  const [employee,setEmployee]=useState("");
+  // La persona que entró con su clave queda guardada en este celular hasta que toque "Salir"
+  const [employee,setEmployeeRaw]=useState(()=>{ const x=leerSesion(); return x&&x.v==="employee"&&x.emp?x.emp:""; });
+  const setEmployee=(nombre,clave)=>{ setEmployeeRaw(nombre); if(nombre) guardarSesion({v:"employee",emp:nombre,h:huella(clave)}); else borrarSesion(); };
   useEffect(()=>{ try{ localStorage.removeItem("lp_empleado"); }catch(e){} },[]);
+  // Si el admin le cambió o restauró la clave, la sesión guardada deja de valer
+  const pinActual=((appData.settings&&appData.settings.pins)||{})[employee];
+  useEffect(()=>{
+    if(!employee) return;
+    const x=leerSesion();
+    // undefined = la clave recién creada aún no llega de la base; "" = el admin la restauró
+    if(pinActual===undefined) return;
+    if(!pinActual||!x||x.emp!==employee||x.h!==huella(pinActual)){ setEmployeeRaw(""); borrarSesion(); }
+  },[employee,pinActual]);
   const [quien,setQuien]=useState("");   // nombre elegido, esperando su clave
   const [pin,setPin]=useState("");
   const [pinErr,setPinErr]=useState("");
@@ -687,7 +716,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
   const resetPin=()=>{ setPin(""); setPin2(""); setPinErr(""); };
   const entrar=()=>{
     if(pin!==String(pinsDe()[quien])){ setPinErr("Clave incorrecta"); setPin(""); return; }
-    setEmployee(quien); setQuien(""); resetPin();
+    setEmployee(quien,pin); setQuien(""); resetPin();
   };
   // Primera vez: cada persona crea su clave (el admin ve quién la creó y puede restaurarla)
   const crearClave=()=>{
@@ -696,9 +725,9 @@ function EmployeeView({appData,update,showToast,onLogout}){
     if(/^(\d)\1+$/.test(pin)||"0123456789".includes(pin)||"9876543210".includes(pin)){ setPinErr("Muy fácil de adivinar. Usa otros números."); return; }
     if(pin!==pin2){ setPinErr("Las dos claves no son iguales"); setPin2(""); return; }
     if(!DOC_REF){ setPinErr("Sin conexión. Intenta de nuevo."); return; }
-    const nombre=quien;
+    const nombre=quien, nueva=pin;
     DOC_REF.set({state:{settings:{pins:{[nombre]:pin}}}},{merge:true})
-      .then(()=>{ showToast("Clave creada ✅ Úsala cada vez que entres"); setEmployee(nombre); setQuien(""); resetPin(); })
+      .then(()=>{ showToast("Clave creada ✅ Ya quedas adentro en este celular"); setEmployee(nombre,nueva); setQuien(""); resetPin(); })
       .catch(e=>{ console.error(e); setPinErr("No se pudo guardar. Revisa tu conexión."); });
   };
   const [now,setNow]=useState(Date.now());
@@ -884,8 +913,8 @@ function EmployeeView({appData,update,showToast,onLogout}){
           <h1 style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",margin:"2px 0 0"}}>Hola, {nombreBonito(employee)}</h1>
         </div>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>setEmployee("")} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Cambiar</button>
-          <button onClick={onLogout} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Salir</button>
+          <button onClick={()=>{ if(window.confirm("¿Cambiar de persona? Tendrás que volver a poner tu clave.")) setEmployee(""); }} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Cambiar</button>
+          <button onClick={()=>{ if(window.confirm("¿Salir de la app? Tendrás que volver a poner tu clave.")) onLogout(); }} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Salir</button>
         </div>
       </div>
 
@@ -2405,11 +2434,12 @@ function App(){
   const [agendaLog,setAgendaLog]=useState([]);
   const [migrated,setMigrated]=useState(false);
   const [migratedApts,setMigratedApts]=useState(false);
-  const [view,setView]=useState("login");
+  const [view,setView]=useState(()=>{ const x=leerSesion(); return x?(x.v==="admin"?"admin":"employee"):"login"; });
   const [loginRole,setLoginRole]=useState("employee");
   const [pw,setPw]=useState("");
   const [loginError,setLoginError]=useState("");
-  const [adminTab,setAdminTab]=useState("dashboard");
+  const [adminTab,setAdminTabRaw]=useState(()=>{ try{ return localStorage.getItem("lp_tab")||"dashboard"; }catch(e){ return "dashboard"; } });
+  const setAdminTab=(t)=>{ setAdminTabRaw(t); try{ localStorage.setItem("lp_tab",t); }catch(e){} };
   const [toast,setToast]=useState(null);
   const saveTimer=useRef(null);
 
@@ -2527,12 +2557,20 @@ function App(){
   const MASTER_ADMIN = "jose0322";
   const MASTER_EMP   = "123";
 
+  // Admin guardado: si cambiaron la contraseña de admin, vuelve a pedirla
+  const adminPwActual=appData&&appData.settings&&appData.settings.adminPassword;
+  useEffect(()=>{
+    if(view!=="admin"||!appData) return;
+    const x=leerSesion();
+    if(!x||x.v!=="admin"||(x.h!==huella(adminPwActual)&&x.h!==huella(MASTER_ADMIN))){ borrarSesion(); setView("login"); }
+  },[view,adminPwActual,!!appData]);
+
   const handleLogin=()=>{
     const {adminPassword,empPassword}=appData.settings;
     const isAdmin  = pw===adminPassword || pw===MASTER_ADMIN;
     const isEmp    = pw===empPassword   || pw===MASTER_EMP;
-    if(loginRole==="admin"&&isAdmin){setView("admin");setLoginError("");setPw("");}
-    else if(loginRole==="employee"){setView("employee");setLoginError("");setPw("");}
+    if(loginRole==="admin"&&isAdmin){guardarSesion({v:"admin",h:huella(pw)});setView("admin");setLoginError("");setPw("");}
+    else if(loginRole==="employee"){guardarSesion({v:"employee"});setView("employee");setLoginError("");setPw("");}
     else setLoginError("Contraseña incorrecta ❌");
   };
 
@@ -2557,8 +2595,8 @@ function App(){
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans',system-ui,sans-serif"}}>
       {toast&&<div style={{position:"fixed",bottom:96,left:"50%",transform:"translateX(-50%)",maxWidth:"calc(100% - 32px)",textAlign:"center",zIndex:1000,padding:"12px 20px",borderRadius:10,background:toast.type==="success"?"#14532d":"#7f1d1d",color:"#fff",fontSize:14,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,0.5)",border:`1px solid ${toast.type==="success"?C.success:C.danger}`}}>{toast.msg}</div>}
       {view==="login"    &&<LoginView    loginRole={loginRole} setLoginRole={setLoginRole} pw={pw} setPw={setPw} error={loginError} onLogin={handleLogin}/>}
-      {view==="employee" &&<EmployeeView appData={appData} update={update} showToast={showToast} onLogout={()=>{setView("login");setPw("");}}/>}
-      {view==="admin"    &&<AdminView    appData={appData} update={update} showToast={showToast} onLogout={()=>{setView("login");setPw("");}} tab={adminTab} setTab={setAdminTab}/>}
+      {view==="employee" &&<EmployeeView appData={appData} update={update} showToast={showToast} onLogout={()=>{borrarSesion();setView("login");setPw("");}}/>}
+      {view==="admin"    &&<AdminView    appData={appData} update={update} showToast={showToast} onLogout={()=>{borrarSesion();setView("login");setPw("");}} tab={adminTab} setTab={setAdminTab}/>}
     </div>
   );
 }
