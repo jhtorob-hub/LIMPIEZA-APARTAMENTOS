@@ -62,6 +62,7 @@
 const { useState, useEffect, useRef } = React;
 
 // Firebase init (protegido)
+let DISPOSITIVOS_COL=null;
 let db=null, DOC_REF=null, CLEANINGS_COL=null, APARTMENTS_COL=null, AGENDA_COL=null, FIREBASE_OK=false, STORAGE=null;
 try {
   if (!firebase.apps.length) { firebase.initializeApp({
@@ -81,6 +82,7 @@ try {
   APARTMENTS_COL = DOC_REF.collection("apartments_log");
   // Agenda: qué apartamentos se limpian cada día (un documento por fecha + apartamento)
   AGENDA_COL = DOC_REF.collection("agenda");
+  DISPOSITIVOS_COL = DOC_REF.collection("dispositivos");
   FIREBASE_OK = true;
   // Almacenamiento de videos (Firebase Storage). Si no carga, la app sigue funcionando sin videos.
   try { STORAGE = firebase.storage(); } catch(e) { console.error("Storage no disponible:", e); }
@@ -248,6 +250,21 @@ const huella = (txt) => { let h=5381; const t="lp|"+String(txt||""); for(let i=0
 const leerSesion = () => { try{ const x=JSON.parse(localStorage.getItem(SESION_KEY)||"null"); return x&&x.v?x:null; }catch(e){ return null; } };
 const guardarSesion = (x) => { try{ localStorage.setItem(SESION_KEY, JSON.stringify({...x,t:Date.now()})); }catch(e){} };
 const borrarSesion = () => { try{ localStorage.removeItem(SESION_KEY); }catch(e){} };
+// Cada celular tiene un identificador propio que se crea la primera vez
+const idDispositivo = () => {
+  try{ let id=localStorage.getItem("lp_dispositivo"); if(!id){ id="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); localStorage.setItem("lp_dispositivo",id); } return id; }
+  catch(e){ return "sin-id"; }
+};
+const nombreDispositivo = () => {
+  const ua=navigator.userAgent||"";
+  if(/iPhone/i.test(ua)) return "iPhone";
+  if(/iPad/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)) return "iPad";
+  const m=ua.match(/Android[^;)]*;\s*([^;)]+?)(?:\sBuild|\))/i);
+  if(/Android/i.test(ua)) return "Android"+(m&&m[1]&&!/^K$|wv/i.test(m[1].trim())?" · "+m[1].trim():"");
+  if(/Windows/i.test(ua)) return "Computador Windows";
+  if(/Mac/i.test(ua)) return "Mac";
+  return "Otro equipo";
+};
 
 // 📲 Instalar en el celular: APK directo en Android, "Agregar a inicio" en iPhone
 const APK_URL = "/descargas/limpieza-pro.apk";
@@ -306,7 +323,7 @@ function LoginView({loginRole,setLoginRole,pw,setPw,error,onLogin}){
           </div>
           {loginRole==="admin"
             ?<div style={{marginBottom:16}}><Lbl>Contraseña</Lbl><Inp type="password" value={pw} onChange={setPw} placeholder="••••••••"/></div>
-            :<div style={{marginBottom:16,fontSize:13,color:C.muted,textAlign:"center"}}>En la siguiente pantalla eliges tu nombre y escribes tu clave.</div>}
+            :<div style={{marginBottom:16,fontSize:13,color:C.muted,textAlign:"center"}}>En la siguiente pantalla eliges tu nombre. Solo se hace una vez en cada celular.</div>}
           {error&&<div style={{color:C.danger,fontSize:13,marginBottom:12,fontWeight:600}}>{error}</div>}
           <Btn onClick={onLogin} style={{width:"100%",padding:"13px",fontSize:15}}>Entrar →</Btn>
         </Card>
@@ -695,41 +712,39 @@ const resumenDia = (cleanings, employee, now) => {
 };
 
 function EmployeeView({appData,update,showToast,onLogout}){
-  // La persona que entró con su clave queda guardada en este celular hasta que toque "Salir"
+  // Cada celular queda a nombre de una persona: se identifica una sola vez y no vuelve a pedir nada.
+  // El admin ve qué celular es de quién (Config → Celulares) y puede desvincularlo.
   const [employee,setEmployeeRaw]=useState(()=>{ const x=leerSesion(); return x&&x.v==="employee"&&x.emp?x.emp:""; });
-  const setEmployee=(nombre,clave)=>{ setEmployeeRaw(nombre); if(nombre) guardarSesion({v:"employee",emp:nombre,h:huella(clave)}); else borrarSesion(); };
+  const setEmployee=(nombre)=>{ setEmployeeRaw(nombre); if(nombre) guardarSesion({v:"employee",emp:nombre}); else borrarSesion(); };
   useEffect(()=>{ try{ localStorage.removeItem("lp_empleado"); }catch(e){} },[]);
-  // Si el admin le cambió o restauró la clave, la sesión guardada deja de valer
-  const pinActual=((appData.settings&&appData.settings.pins)||{})[employee];
+  const [quien,setQuien]=useState("");   // nombre elegido, esperando que confirme
+  const vincular=(nombre)=>{
+    const ref=DISPOSITIVOS_COL&&DISPOSITIVOS_COL.doc(idDispositivo());
+    setEmployee(nombre); setQuien("");
+    showToast(`Listo ✅ Este celular quedó a nombre de ${nombreBonito(nombre)}`);
+    if(ref) ref.set({emp:nombre,equipo:nombreDispositivo(),vinculado:Date.now(),ultimo:Date.now(),revocado:false},{merge:true}).catch(e=>console.error(e));
+  };
+  const desvincularEste=()=>{
+    const ref=DISPOSITIVOS_COL&&DISPOSITIVOS_COL.doc(idDispositivo());
+    if(ref) ref.set({revocado:true,ultimo:Date.now()},{merge:true}).catch(e=>console.error(e));
+    setEmployee("");
+  };
+  // Si el admin desvincula este celular, vuelve a preguntar quién es
   useEffect(()=>{
-    if(!employee) return;
-    const x=leerSesion();
-    // undefined = la clave recién creada aún no llega de la base; "" = el admin la restauró
-    if(pinActual===undefined) return;
-    if(!pinActual||!x||x.emp!==employee||x.h!==huella(pinActual)){ setEmployeeRaw(""); borrarSesion(); }
-  },[employee,pinActual]);
-  const [quien,setQuien]=useState("");   // nombre elegido, esperando su clave
-  const [pin,setPin]=useState("");
-  const [pinErr,setPinErr]=useState("");
-  const [pin2,setPin2]=useState("");      // confirmación al crear la clave
-  const pinsDe=()=>(appData.settings&&appData.settings.pins)||{};
-  const resetPin=()=>{ setPin(""); setPin2(""); setPinErr(""); };
-  const entrar=()=>{
-    if(pin!==String(pinsDe()[quien])){ setPinErr("Clave incorrecta"); setPin(""); return; }
-    setEmployee(quien,pin); setQuien(""); resetPin();
-  };
-  // Primera vez: cada persona crea su clave (el admin ve quién la creó y puede restaurarla)
-  const crearClave=()=>{
-    if(pinsDe()[quien]){ setPinErr("Ya tienes clave. Escríbela para entrar."); return; }
-    if(!/^\d{4,6}$/.test(pin)){ setPinErr("Tu clave debe tener de 4 a 6 números"); return; }
-    if(/^(\d)\1+$/.test(pin)||"0123456789".includes(pin)||"9876543210".includes(pin)){ setPinErr("Muy fácil de adivinar. Usa otros números."); return; }
-    if(pin!==pin2){ setPinErr("Las dos claves no son iguales"); setPin2(""); return; }
-    if(!DOC_REF){ setPinErr("Sin conexión. Intenta de nuevo."); return; }
-    const nombre=quien, nueva=pin;
-    DOC_REF.set({state:{settings:{pins:{[nombre]:pin}}}},{merge:true})
-      .then(()=>{ showToast("Clave creada ✅ Ya quedas adentro en este celular"); setEmployee(nombre,nueva); setQuien(""); resetPin(); })
-      .catch(e=>{ console.error(e); setPinErr("No se pudo guardar. Revisa tu conexión."); });
-  };
+    if(!employee||!DISPOSITIVOS_COL) return;
+    const ref=DISPOSITIVOS_COL.doc(idDispositivo());
+    let primera=true;
+    const unsub=ref.onSnapshot(d=>{
+      const x=d.exists?d.data():null;
+      if(x&&x.revocado){ setEmployeeRaw(""); borrarSesion(); return; }
+      if(primera){
+        primera=false;
+        // Celular que ya estaba adentro antes de esta versión: se registra solo
+        ref.set(x?{ultimo:Date.now(),emp:employee}:{emp:employee,equipo:nombreDispositivo(),vinculado:Date.now(),ultimo:Date.now(),revocado:false},{merge:true}).catch(()=>{});
+      }
+    },()=>{});
+    return ()=>unsub();
+  },[employee]);
   const [now,setNow]=useState(Date.now());
   useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),15000); return ()=>clearInterval(t); },[]);
   const [saving,setSaving]=useState(false);
@@ -842,31 +857,19 @@ function EmployeeView({appData,update,showToast,onLogout}){
   const page={minHeight:"100vh",background:W.bg,color:W.ink};
   const wrap={maxWidth:520,margin:"0 auto",padding:"18px 16px 40px"};
 
-  // 1b) Clave de la persona elegida (o crearla si es la primera vez)
-  if(!employee&&quien){
-    const tiene=!!pinsDe()[quien];
-    const pinInput=(val,set,label,auto)=>(<input type="password" inputMode="numeric" autoFocus={auto} value={val} onChange={e=>{set(e.target.value.replace(/\D/g,"").slice(0,6));setPinErr("");}} onKeyDown={e=>e.key==="Enter"&&(tiene?entrar():crearClave())} placeholder="••••" aria-label={label}
-      style={{...wInput,textAlign:"center",fontSize:28,letterSpacing:"0.4em",padding:"14px",marginBottom:12}}/>);
-    const lbl=(t)=><div style={{fontSize:14,fontWeight:700,color:W.ink,marginBottom:6}}>{t}</div>;
-    return(
+  // 1b) Confirmar quién es (una sola vez en este celular)
+  if(!employee&&quien) return(
     <div style={page}><div style={wrap}>
-      <button onClick={()=>{setQuien("");resetPin();}} style={{background:"none",border:"none",color:W.muted,fontWeight:700,fontSize:15,padding:0,cursor:"pointer",fontFamily:"inherit"}}>← Volver</button>
-      <div style={{textAlign:"center",marginTop:20}}>
-        <div style={{width:72,height:72,borderRadius:"50%",background:W.brandSoft,color:W.brand,fontWeight:900,fontSize:30,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>{quien.slice(0,1)}</div>
-        <h1 style={{fontSize:26,fontWeight:800,letterSpacing:"-0.03em",margin:"0 0 4px"}}>Hola, {nombreBonito(quien)}</h1>
-        <div style={{color:W.muted,fontSize:15,marginBottom:20}}>{tiene?"Escribe tu clave":"Es tu primera vez: crea tu clave personal"}</div>
+      <button onClick={()=>setQuien("")} style={{background:"none",border:"none",color:W.muted,fontWeight:700,fontSize:15,padding:0,cursor:"pointer",fontFamily:"inherit"}}>← Volver</button>
+      <div style={{textAlign:"center",marginTop:28}}>
+        <div style={{width:88,height:88,borderRadius:"50%",background:W.brandSoft,color:W.brand,fontWeight:900,fontSize:36,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>{quien.slice(0,1)}</div>
+        <h1 style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",margin:"0 0 8px"}}>¿Eres {nombreBonito(quien)}?</h1>
+        <div style={{color:W.muted,fontSize:15,lineHeight:1.45,marginBottom:26}}>Este celular va a quedar a tu nombre.<br/>Tus limpiezas, videos y horas se guardan como tuyos.</div>
       </div>
-      {tiene?pinInput(pin,setPin,"Tu clave",true):(<>
-        {lbl("Tu nueva clave (4 a 6 números)")}
-        {pinInput(pin,setPin,"Tu nueva clave",true)}
-        {lbl("Repítela")}
-        {pinInput(pin2,setPin2,"Repite tu clave",false)}
-      </>)}
-      {pinErr&&<div style={{color:W.red,fontWeight:700,textAlign:"center",marginBottom:10}}>{pinErr}</div>}
-      {tiene?<WBtn onClick={entrar} disabled={!pin}>Entrar</WBtn>:<WBtn onClick={crearClave} disabled={!pin||!pin2}>Crear mi clave y entrar</WBtn>}
-      <div style={{fontSize:13,color:W.muted,textAlign:"center",marginTop:14}}>{tiene?"¿Se te olvidó? Pídele a coordinación que la borre y creas una nueva.":"Solo tú la sabes. Con ella quedan a tu nombre tus limpiezas y tus horas. Si te equivocas de nombre, avísale a coordinación."}</div>
+      <WBtn onClick={()=>vincular(quien)} style={{minHeight:60,fontSize:17}}>Sí, soy {nombreBonito(quien)}</WBtn>
+      <WBtn kind="ghost" onClick={()=>setQuien("")} style={{marginTop:8}}>No, elegir otro nombre</WBtn>
     </div></div>
-  );}
+  );
 
   // 1) ¿Quién eres?
   if(!employee) return(
@@ -875,7 +878,7 @@ function EmployeeView({appData,update,showToast,onLogout}){
       <h1 style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",margin:"6px 0 20px"}}>¿Quién eres?</h1>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         {appData.employees.map(e=>(
-          <button key={e} onClick={()=>{setQuien(e);resetPin();}} style={{...wCard,cursor:"pointer",fontFamily:"inherit",textAlign:"center",padding:"22px 10px"}}>
+          <button key={e} onClick={()=>setQuien(e)} style={{...wCard,cursor:"pointer",fontFamily:"inherit",textAlign:"center",padding:"22px 10px"}}>
             <div style={{width:52,height:52,borderRadius:"50%",background:W.brandSoft,color:W.brand,fontWeight:900,fontSize:22,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>{e.slice(0,1)}</div>
             <div style={{fontWeight:800,fontSize:16,color:W.ink}}>{nombreBonito(e)}</div>
           </button>
@@ -913,8 +916,8 @@ function EmployeeView({appData,update,showToast,onLogout}){
           <h1 style={{fontSize:28,fontWeight:800,letterSpacing:"-0.03em",margin:"2px 0 0"}}>Hola, {nombreBonito(employee)}</h1>
         </div>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>{ if(window.confirm("¿Cambiar de persona? Tendrás que volver a poner tu clave.")) setEmployee(""); }} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Cambiar</button>
-          <button onClick={()=>{ if(window.confirm("¿Salir de la app? Tendrás que volver a poner tu clave.")) onLogout(); }} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Salir</button>
+          <button onClick={()=>{ if(window.confirm(`¿Este celular no es de ${nombreBonito(employee)}? Vas a elegir otro nombre.`)) desvincularEste(); }} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Cambiar</button>
+          <button onClick={()=>{ if(window.confirm("¿Salir? Este celular deja de estar a tu nombre y tendrás que elegirlo otra vez.")) { desvincularEste(); onLogout(); } }} style={{background:W.card,border:`1px solid ${W.line}`,borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:700,color:W.muted,cursor:"pointer",fontFamily:"inherit"}}>Salir</button>
         </div>
       </div>
 
@@ -2248,6 +2251,40 @@ function CostosSection({appData,update,showToast}){
   );
 }
 
+// 📱 Qué celular está a nombre de quién (las aseadoras se identifican una vez por celular)
+function CelularesSection({appData,showToast}){
+  const [lista,setLista]=useState(null);
+  useEffect(()=>{
+    if(!DISPOSITIVOS_COL){ setLista([]); return; }
+    return DISPOSITIVOS_COL.onSnapshot(snap=>{ const l=[]; snap.forEach(d=>l.push({id:d.id,...d.data()})); setLista(l); },e=>{ console.error(e); setLista([]); });
+  },[]);
+  const desvincular=(d)=>{
+    if(!window.confirm(`¿Desvincular este ${d.equipo||"celular"} de ${d.emp}? La próxima vez que abra la app tendrá que elegir su nombre otra vez.`)) return;
+    DISPOSITIVOS_COL.doc(d.id).set({revocado:true},{merge:true}).then(()=>showToast("Celular desvinculado")).catch(e=>{console.error(e);showToast("No se pudo desvincular","error");});
+  };
+  const cuando=(t)=>{ if(!t) return "—"; const d=new Date(t); const hoy=todayStr(); const f=`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; return (f===hoy?"hoy":fmtDate(f))+" "+toHM(t); };
+  const activos=(lista||[]).filter(d=>!d.revocado&&d.emp);
+  const nombres=[...new Set([...appData.employees,...activos.map(d=>d.emp)])];
+  return(
+    <Card style={{maxWidth:520,flex:"1 1 340px"}}>
+      <h3 style={{margin:"0 0 6px",fontSize:15,fontWeight:700}}>📱 Celulares de cada aseadora</h3>
+      <div style={{fontSize:12,color:C.muted,marginBottom:14}}>Cada una elige su nombre una sola vez en su celular y queda adentro. Si ves un celular a nombre de quien no es, desvincúlalo.</div>
+      {lista===null?<div style={{color:C.muted,fontSize:13}}>Cargando…</div>:nombres.map(e=>{
+        const ds=activos.filter(d=>d.emp===e).sort((a,b)=>(b.ultimo||0)-(a.ultimo||0));
+        return(
+          <div key={e} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
+            <div style={{fontWeight:700,fontSize:13}}>👤 {e} <span style={{fontWeight:600,fontSize:11,color:ds.length?C.success:C.muted}}>{ds.length?`· ${ds.length} celular${ds.length===1?"":"es"}`:"· sin celular todavía"}</span></div>
+            {ds.map(d=>(
+              <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:8,padding:"8px 10px",background:C.surface,borderRadius:8}}>
+                <div style={{fontSize:12}}><div style={{fontWeight:600}}>{d.equipo||"Celular"}</div><div style={{color:C.muted,fontSize:11}}>Desde {cuando(d.vinculado)} · último uso {cuando(d.ultimo)}</div></div>
+                <Btn variant="ghost" size="sm" onClick={()=>desvincular(d)}>Desvincular</Btn>
+              </div>))}
+          </div>);
+      })}
+    </Card>
+  );
+}
+
 function ConfigTab({appData,update,showToast}){
   const [sec,setSec]=useState("apartments");
   const [nAptNum,setNAptNum]=useState("");
@@ -2316,16 +2353,6 @@ function ConfigTab({appData,update,showToast}){
       .then(()=>showToast("Eliminado","error"))
       .catch(e=>{console.error(e);showToast("No se pudo eliminar, intenta de nuevo","error");});
   };
-  const [pinNuevo,setPinNuevo]=useState({});   // admin: clave nueva escrita para cada persona
-  const cambiarPin=(e)=>{
-    const v=String(pinNuevo[e]||"");
-    if(!/^\d{4,6}$/.test(v)){ showToast("La clave debe tener de 4 a 6 números","error"); return; }
-    DOC_REF&&DOC_REF.set({state:{settings:{pins:{[e]:v}}}},{merge:true}).then(()=>{setPinNuevo(p=>({...p,[e]:""}));showToast(`Clave de ${e} cambiada ✅ Díctasela`);}).catch(err=>{console.error(err);showToast("No se pudo cambiar","error");});
-  };
-  const borrarPin=(e)=>{
-    if(!window.confirm(`¿Restaurar la clave de ${e}? La próxima vez que entre creará una nueva.`)) return;
-    DOC_REF&&DOC_REF.set({state:{settings:{pins:{[e]:""}}}},{merge:true}).then(()=>showToast(`Clave de ${e} restaurada: la crea de nuevo al entrar`)).catch(err=>{console.error(err);showToast("No se pudo borrar","error");});
-  };
   const savePws=()=>{const s={...appData.settings};if(newAdminPw)s.adminPassword=newAdminPw;if(newEmpPw)s.empPassword=newEmpPw;update("settings",s);setNewAdminPw("");setNewEmpPw("");showToast("Contraseñas guardadas ✅");};
   const filteredApts=localApts.filter(a=>a.displayName.toLowerCase().includes(aptSearch.toLowerCase())||a.clientName?.toLowerCase().includes(aptSearch.toLowerCase())).sort((a,b)=>a.displayName.localeCompare(b.displayName));
   const inpStyle={width:"100%",padding:"10px 14px",background:"#0b0f18",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.text,fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit"};
@@ -2333,7 +2360,7 @@ function ConfigTab({appData,update,showToast}){
     <div>
       <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Configuración</h2>
       <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-        {[["apartments","🏠 Apartamentos"],["costos","💲 Costos"],["employees","👤 Encargados"],["passwords","🔐 Contraseñas"],["backup","💾 Backup"]].map(([id,label])=>(
+        {[["apartments","🏠 Apartamentos"],["costos","💲 Costos"],["employees","👤 Encargados"],["passwords","📱 Celulares y admin"],["backup","💾 Backup"]].map(([id,label])=>(
           <Btn key={id} variant={sec===id?"primary":"ghost"} onClick={()=>setSec(id)}>{label}</Btn>
         ))}
       </div>
@@ -2390,25 +2417,11 @@ function ConfigTab({appData,update,showToast}){
         </div>
       )}
       {sec==="passwords"&&(<div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
+        <CelularesSection appData={appData} showToast={showToast}/>
         <Card style={{maxWidth:420,flex:"1 1 320px"}}>
-          <h3 style={{margin:"0 0 6px",fontSize:15,fontWeight:700}}>Clave de cada aseadora</h3>
-          <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Cada una crea su propia clave la primera vez que entra con su nombre. Revisa que todas aparezcan con "Tiene clave": si alguien la creó con un nombre que no era el suyo, o alguna la olvida, ponle una tú (Cambiar) o restáurala para que ella cree otra.</div>
-          {appData.employees.map(e=>{const t=!!(appData.settings.pins||{})[e];return(
-            <div key={e} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
-                <div style={{fontWeight:600,fontSize:13}}>👤 {e}<div style={{fontSize:11,fontWeight:700,color:t?C.success:C.muted,marginTop:2}}>{t?"✓ Tiene clave":"Aún no tiene clave"}</div></div>
-                {t&&<Btn variant="ghost" size="sm" onClick={()=>borrarPin(e)}>↺ Restaurar</Btn>}
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginTop:8}}>
-                <Inp value={pinNuevo[e]||""} onChange={v=>setPinNuevo(p=>({...p,[e]:v.replace(/\D/g,"").slice(0,6)}))} placeholder={t?"Nueva clave (4 a 6 números)":"Ponerle una clave (opcional)"}/>
-                <Btn size="sm" onClick={()=>cambiarPin(e)} disabled={!pinNuevo[e]}>Cambiar</Btn>
-              </div>
-            </div>);})}
-        </Card>
-        <Card style={{maxWidth:420,flex:"1 1 320px"}}>
-          <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:700}}>Cambiar contraseñas</h3>
+          <h3 style={{margin:"0 0 16px",fontSize:15,fontWeight:700}}>Contraseña de admin</h3>
           <div style={{marginBottom:14}}><Lbl>Nueva contraseña Admin</Lbl><Inp type="password" value={newAdminPw} onChange={setNewAdminPw} placeholder="Dejar vacío para no cambiar"/></div>
-          <div style={{marginBottom:20}}><Lbl>Nueva contraseña Encargados (ya no se usa para entrar)</Lbl><Inp type="password" value={newEmpPw} onChange={setNewEmpPw} placeholder="Dejar vacío para no cambiar"/></div>
+          <div style={{marginBottom:20}}><Lbl>Nueva contraseña Encargados (ya no se usa)</Lbl><Inp type="password" value={newEmpPw} onChange={setNewEmpPw} placeholder="Dejar vacío para no cambiar"/></div>
           <Btn onClick={savePws} style={{width:"100%"}}>Guardar</Btn>
           <div style={{marginTop:14,padding:12,background:C.surface,borderRadius:8,fontSize:12,color:C.muted}}>
             Admin: <code style={{color:C.accent}}>{appData.settings.adminPassword}</code>&nbsp;&nbsp;
