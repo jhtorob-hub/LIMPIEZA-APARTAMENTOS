@@ -1380,7 +1380,7 @@ function FotosModal({cleaning,onClose}){
   );
 }
 
-function EditModal({cleaning,appData,onSave,onClose}){
+function EditModal({cleaning,appData,onSave,onClose,isNew=false}){
   const [form,setForm]=useState({...cleaning});
   // Horas de entrada y salida (para cargar las que vienen de los videos de WhatsApp)
   const [tIni,setTIni]=useState(toHM(cleaning.startedAt));
@@ -1389,6 +1389,7 @@ function EditModal({cleaning,appData,onSave,onClose}){
     const f={...form};
     const ts=(hm)=>hm?new Date(`${f.date}T${hm}:00`).getTime():null;
     const s=ts(tIni), e=ts(tFin);
+    if(isNew&&(!f.date||!f.employeeName||!f.apartmentId)){ window.alert("Elige fecha, encargado y apartamento"); return; }
     if(s&&e&&e<=s){ window.alert("La hora de salida debe ser después de la de entrada"); return; }
     f.startedAt=s; f.finishedAt=e; f.durationMin=(s&&e)?Math.round((e-s)/60000):null;
     if(s&&e) f.enCurso=false;
@@ -1399,13 +1400,13 @@ function EditModal({cleaning,appData,onSave,onClose}){
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   const handleApt=(aptId)=>{
     const apt=appData.apartments.find(a=>a.id===aptId);
-    if(apt) set("apartmentId",aptId),set("apartmentName",apt.displayName),set("clientName",apt.clientName||""),set("amount",apt.price||0);
+    if(apt) set("apartmentId",aptId),set("apartmentName",apt.displayName),set("clientName",apt.clientName||""),set("amount",apt.price||0),set("tipo",apt.tipo||"");
   };
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:24,width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <h3 style={{margin:0,fontSize:17,fontWeight:800}}>✏️ Editar registro</h3>
+          <h3 style={{margin:0,fontSize:17,fontWeight:800}}>{isNew?"➕ Agregar servicio":"✏️ Editar registro"}</h3>
           <button onClick={onClose} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:20,fontFamily:"inherit"}}>✕</button>
         </div>
         <div style={{marginBottom:14}}><Lbl>Fecha</Lbl><Inp type="date" value={form.date||""} onChange={v=>set("date",v)}/></div>
@@ -1440,7 +1441,7 @@ function EditModal({cleaning,appData,onSave,onClose}){
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn variant="ghost" onClick={onClose} style={{flex:1}}>Cancelar</Btn>
-          <Btn onClick={doSave} style={{flex:1}}>💾 Guardar</Btn>
+          <Btn onClick={doSave} style={{flex:1}}>{isNew?"➕ Agregar":"💾 Guardar"}</Btn>
         </div>
       </div>
     </div>
@@ -1501,13 +1502,39 @@ function CleaningsTab({appData,update,showToast}){
       .then(()=>{setEditing(null);showToast("Registro actualizado ✅");})
       .catch(e=>{console.error(e);showToast("No se pudo actualizar","error");});
   };
+  // ➕ Servicio agregado desde el admin: mismas reglas anti-duplicados que en el celular
+  const [adding,setAdding]=useState(null);
+  const nuevoServicio=()=>setAdding({date:todayStr(),employeeName:"",apartmentId:"",apartmentName:"",clientName:"",amount:0,notes:"",paid:false});
+  const saveNew=(form)=>{
+    const {id,...f}=form;
+    const apt=appData.apartments.find(a=>a.id===f.apartmentId);
+    if(!apt||!CLEANINGS_COL||!db){ showToast("Elige el apartamento","error"); return; }
+    const same=appData.cleanings.filter(c=>c.date===f.date&&(c.apartmentId===apt.id||normTxt(c.apartmentName)===normTxt(apt.displayName)));
+    if(same.some(c=>normTxt(c.employeeName)===normTxt(f.employeeName))){ window.alert(`${apt.displayName} ya está registrado por ${f.employeeName} el ${fmtDate(f.date)}.`); return; }
+    if(same.length>0&&!window.confirm(`${apt.displayName} ya fue registrado el ${fmtDate(f.date)} por ${same.map(c=>c.employeeName||"otra persona").join(", ")}.\n\n¿Agregarlo de todas formas?`)) return;
+    const ts=Date.now();
+    const newC={...f,apartmentName:apt.displayName||"",clientName:f.clientName||apt.clientName||"",tipo:apt.tipo||f.tipo||"",
+      time:f.startedAt?toHM(f.startedAt):new Date(ts).toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"}),
+      enCurso:false,createdAt:ts,creadoPorAdmin:true};
+    const ref=CLEANINGS_COL.doc(`${f.date}_${apt.id}_${f.employeeName}`.replace(/[\/\s]+/g,"-"));
+    db.runTransaction(async t=>{ const s=await t.get(ref); if(s.exists) throw new Error("DUPLICADO"); t.set(ref,newC); })
+      .then(()=>{ setAdding(null); showToast(`➕ ${apt.displayName} agregado ✅`); })
+      .catch(e=>{
+        if(e&&e.message==="DUPLICADO"){ showToast("Ese servicio ya estaba registrado, no se duplicó","error"); return; }
+        console.error(e); showToast("No se pudo agregar, revisa tu conexión","error");
+      });
+  };
   const total=filtered.reduce((s,c)=>s+(c.amount||0),0);
   const totalPaid=filtered.filter(c=>c.paid).reduce((s,c)=>s+(c.amount||0),0);
   return(
     <div>
       {editing&&<EditModal cleaning={editing} appData={appData} onSave={saveEdit} onClose={()=>setEditing(null)}/>}
+      {adding&&<EditModal isNew cleaning={adding} appData={appData} onSave={saveNew} onClose={()=>setAdding(null)}/>}
       {viewing&&<FotosModal cleaning={viewing} onClose={()=>setViewing(null)}/>}
-      <h2 style={{margin:"0 0 20px",fontSize:22,fontWeight:800}}>Todos los registros</h2>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,margin:"0 0 20px"}}>
+        <h2 style={{margin:0,fontSize:22,fontWeight:800}}>Todos los registros</h2>
+        <Btn onClick={nuevoServicio}>➕ Agregar servicio</Btn>
+      </div>
       {(autoDups.length>0||pairs.length>0||(appData.duplicates||[]).length>0)&&(
         <Card style={{marginBottom:20,border:`1px solid ${autoDups.length>0?C.danger:C.border}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
